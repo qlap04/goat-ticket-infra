@@ -1,4 +1,3 @@
-// TODO: App Service Plan + App Service with VNet integration
 // modules/compute/appService.bicep
 // App Service Plan (Premium v3, Linux) + App Service (API)
 // Outbound via VNet Integration (snet-app) — inbound via Private Endpoint (separate module)
@@ -27,10 +26,13 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2025-01-01' = {
     name: 'P1v3'
   }
   properties: {
-    reserved: true // Linux plan
+    reserved: true
   }
 }
 
+// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
+// checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID (Microsoft.Identity.Web) handles all authentication
+// checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once /api/health exists
 resource appService 'Microsoft.Web/sites@2025-01-01' = {
   name: appServiceName
   location: location
@@ -48,6 +50,7 @@ resource appService 'Microsoft.Web/sites@2025-01-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       vnetRouteAllEnabled: true
+      http20Enabled: true
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

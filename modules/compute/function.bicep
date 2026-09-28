@@ -1,8 +1,7 @@
 // modules/compute/function.bicep
 // Function App Plan (Premium EP1, Linux) + Function App (.NET 8 isolated worker)
 // Outbound via VNet Integration (snet-func) — inbound via Private Endpoint (separate module)
-// AzureWebJobsStorage uses Identity-based connection (no Account Key), since the
-// runtime Storage Account has allowSharedKeyAccess disabled.
+// AzureWebJobsStorage uses Identity-based connection (no Account Key)
 
 @description('Environment for Function App')
 @allowed(['dev', 'prod'])
@@ -39,6 +38,9 @@ resource functionPlan 'Microsoft.Web/serverfarms@2025-01-01' = {
   }
 }
 
+// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
+// checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID handles authentication for the API; Function has no public inbound
+// checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once a health check function exists
 resource functionApp 'Microsoft.Web/sites@2025-01-01' = {
   name: functionAppName
   location: location
@@ -57,6 +59,7 @@ resource functionApp 'Microsoft.Web/sites@2025-01-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       vnetRouteAllEnabled: true
+      http20Enabled: true
       appSettings: [
         {
           name: 'AzureWebJobsStorage__accountName'

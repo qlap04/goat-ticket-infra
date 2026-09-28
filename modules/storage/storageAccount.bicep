@@ -8,8 +8,9 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
-var runtimeStorageAccountName = 'stgoatrt${environment}${uniqueString(resourceGroup().id)}'
-var businessStorageAccountName = 'stgoatbiz${environment}${uniqueString(resourceGroup().id)}'
+// storageAccount.bicep
+var runtimeStorageAccountName = 'stgrt${environment}${take(uniqueString(resourceGroup().id), 8)}'
+var businessStorageAccountName = 'stgbiz${environment}${take(uniqueString(resourceGroup().id), 8)}'
 
 // ===== Runtime Storage — Function's own internal state (lock files, checkpoints) =====
 resource runtimeStorageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' = {

@@ -24,10 +24,13 @@ resource runtimeStorageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' = 
     publicNetworkAccess: 'Disabled'
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 
-// ===== Business Storage — tickets blob + order/seat-hold queues =====
 resource businessStorageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' = {
   name: businessStorageAccountName
   location: location
@@ -39,6 +42,10 @@ resource businessStorageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' =
     publicNetworkAccess: 'Disabled'
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 

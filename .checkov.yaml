@@ -1,0 +1,4 @@
+skip-check:
+  - CKV_AZURE_225 # Zone redundancy — not needed for portfolio dev scale
+  - CKV_AZURE_17 # Client certificates — Entra ID handles auth, not mTLS
+  - CKV_AZURE_213 # Health check — endpoint not yet implemented in app code

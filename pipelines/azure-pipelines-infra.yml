@@ -1,69 +1,154 @@
-# TODO: trigger path infra/* — build/validate then deploy stages targeting the prod environment
-# infra/pipelines/azure-pipelines-infra.yml
+# pipelines/azure-pipelines-infra.yml
+# GOAT Ticket — Infra pipeline (Trunk-based, tag-triggered)
+# Repo root = infra root (no "infra/" prefix needed, unlike the old combined-repo layout)
+
 trigger:
   branches:
-    include: [main]
-  paths:
     include:
-      - infra/*
+      - dev
+  tags:
+    include:
+      - infra-v*.*.*
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: "ubuntu-latest"
 
 variables:
-  - group: goat-ticket-secrets   
-stages:
-  - stage: ValidateInfra
-    displayName: 'Validate Bicep'
-    jobs:
-      - job: Lint
-        steps:
-          - script: az bicep build --file infra/main.bicep
-            displayName: 'Bicep build (syntax check)'
+  - group: goat-ticket-secrets
 
+stages:
+  # ===== 1. LINT =====
+  - stage: Lint
+    displayName: "Lint Bicep"
+    jobs:
+      - job: LintBicep
+        steps:
+          - script: |
+              find . -name "*.bicep" | while read file; do
+                echo "Linting: $file"
+                az bicep build --file "$file" --stdout > /dev/null || exit 1
+              done
+              echo "All Bicep files passed lint."
+            displayName: "az bicep build (syntax check)"
+
+  # ===== 2. VALIDATE (preflight, no resources created) =====
+  - stage: Validate
+    displayName: "Validate Against Azure"
+    dependsOn: Lint
+    jobs:
+      - job: ValidateDev
+        steps:
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: "goat-ticket-connection"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az deployment sub validate \
+                  --location southeastasia \
+                  --template-file main.bicep \
+                  --parameters environments/dev.bicepparam \
+                  --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
+                  --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri)
+            displayName: "Preflight validate (dev)"
+
+  # ===== 3. SECURITY SCAN =====
+  - stage: SecurityScan
+    displayName: "IaC Security Scan"
+    dependsOn: Validate
+    jobs:
+      - job: ScanBicep
+        steps:
+          - task: MicrosoftSecurityDevOps@1
+            displayName: "MSDO - Checkov + Template Analyzer"
+            inputs:
+              tools: "checkov,templateanalyzer"
+              categories: "IaC"
+              break: true
+              publish: true
+
+  # ===== 4. WHAT-IF (preview changes) =====
+  - stage: WhatIf
+    displayName: "What-If Preview"
+    dependsOn: SecurityScan
+    jobs:
+      - job: WhatIfDev
+        steps:
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: "goat-ticket-connection"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az deployment sub what-if \
+                  --location southeastasia \
+                  --template-file main.bicep \
+                  --parameters environments/dev.bicepparam \
+                  --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
+                  --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri) \
+                  --result-format FullResourcePayloads > whatif-output.txt
+                cat whatif-output.txt
+                if grep -q "Delete" whatif-output.txt; then
+                  echo "##vso[task.logissue type=warning]What-If detected resource DELETIONS — review carefully."
+                fi
+            displayName: "What-If (dev) — preview changes"
+          - publish: whatif-output.txt
+            artifact: whatif-report
+
+  # ===== 5. DEPLOY DEV =====
   - stage: DeployDev
-    displayName: 'Deploy to Dev'
-    dependsOn: ValidateInfra
+    displayName: "Deploy to Dev"
+    dependsOn: WhatIf
     jobs:
       - deployment: DeployInfraDev
-        environment: 'goat-dev'   
+        environment: "goat-dev"
         strategy:
           runOnce:
             deploy:
               steps:
                 - task: AzureCLI@2
                   inputs:
-                    azureSubscription: 'goat-ticket-connection'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
+                    azureSubscription: "goat-ticket-connection"
+                    scriptType: "bash"
+                    scriptLocation: "inlineScript"
                     inlineScript: |
                       az deployment sub create \
                         --location southeastasia \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/dev.bicepparam \
+                        --template-file main.bicep \
+                        --parameters environments/dev.bicepparam \
                         --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
                         --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri)
+                  displayName: "az deployment sub create (dev)"
 
+  # ===== 6. DEPLOY PROD (Approval Gate — exists but never approved) =====
   - stage: DeployProd
-    displayName: 'Deploy to Prod'
+    displayName: "Deploy to Prod"
     dependsOn: DeployDev
     condition: succeeded()
     jobs:
       - deployment: DeployInfraProd
-        environment: 'goat-prod'   # ← Approval Gate gắn ở Environment này (Project Settings → Environments)
+        environment: "goat-prod"
         strategy:
           runOnce:
             deploy:
               steps:
                 - task: AzureCLI@2
                   inputs:
-                    azureSubscription: 'goat-ticket-connection'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
+                    azureSubscription: "goat-ticket-connection"
+                    scriptType: "bash"
+                    scriptLocation: "inlineScript"
                     inlineScript: |
-                      az deployment sub create \
+                      az deployment sub what-if \
                         --location southeastasia \
-                        --template-file infra/main.bicep \
-                        --parameters infra/environments/prod.bicepparam \
+                        --template-file main.bicep \
+                        --parameters environments/prod.bicepparam \
                         --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValueProd) \
                         --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUriProd)
+
+                      az deployment sub create \
+                        --location southeastasia \
+                        --template-file main.bicep \
+                        --parameters environments/prod.bicepparam \
+                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValueProd) \
+                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUriProd)
+                  displayName: "What-If + Deploy (prod)"

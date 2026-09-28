@@ -27,6 +27,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2025-01-01' = {
     enableRbacAuthorization: true
     publicNetworkAccess: 'Disabled'
     accessPolicies: []
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 

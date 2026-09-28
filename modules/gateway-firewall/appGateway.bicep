@@ -79,6 +79,10 @@ resource appGateway 'Microsoft.Network/applicationGateways@2023-11-01' = {
     firewallPolicy: {
       id: wafPolicy.id
     }
+    sslPolicy: {
+      policyType: 'Predefined'
+      policyName: 'AppGwSslPolicy20220101S'
+    }
     autoscaleConfiguration: {
       minCapacity: 1
       maxCapacity: 3

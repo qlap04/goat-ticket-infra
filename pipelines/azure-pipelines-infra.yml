@@ -3,9 +3,6 @@
 # Repo root = infra root (no "infra/" prefix needed, unlike the old combined-repo layout)
 
 trigger:
-  branches:
-    include:
-      - dev
   tags:
     include:
       - infra-v*.*.*

@@ -31,6 +31,9 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-01-01' = {
     }
     publicNetworkAccess: 'Disabled'
     disableLocalAuth: true
+    disableKeyBasedMetadataWriteAccess: true
+    ipRules: []
+    isVirtualNetworkFilterEnabled: true
     capabilities: [
       { name: 'EnableServerless' }
     ]

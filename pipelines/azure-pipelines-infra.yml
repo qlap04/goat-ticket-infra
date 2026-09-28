@@ -1,0 +1,69 @@
+# TODO: trigger path infra/* — build/validate then deploy stages targeting the prod environment
+# infra/pipelines/azure-pipelines-infra.yml
+trigger:
+  branches:
+    include: [main]
+  paths:
+    include:
+      - infra/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: goat-ticket-secrets   
+stages:
+  - stage: ValidateInfra
+    displayName: 'Validate Bicep'
+    jobs:
+      - job: Lint
+        steps:
+          - script: az bicep build --file infra/main.bicep
+            displayName: 'Bicep build (syntax check)'
+
+  - stage: DeployDev
+    displayName: 'Deploy to Dev'
+    dependsOn: ValidateInfra
+    jobs:
+      - deployment: DeployInfraDev
+        environment: 'goat-dev'   
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'goat-ticket-connection'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment sub create \
+                        --location southeastasia \
+                        --template-file infra/main.bicep \
+                        --parameters infra/environments/dev.bicepparam \
+                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
+                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri)
+
+  - stage: DeployProd
+    displayName: 'Deploy to Prod'
+    dependsOn: DeployDev
+    condition: succeeded()
+    jobs:
+      - deployment: DeployInfraProd
+        environment: 'goat-prod'   # ← Approval Gate gắn ở Environment này (Project Settings → Environments)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'goat-ticket-connection'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment sub create \
+                        --location southeastasia \
+                        --template-file infra/main.bicep \
+                        --parameters infra/environments/prod.bicepparam \
+                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValueProd) \
+                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUriProd)

@@ -1,11 +1,10 @@
-# pipelines/azure-pipelines-infra.yml
-# GOAT Ticket — Infra pipeline (Trunk-based, tag-triggered)
-# Repo root = infra root (no "infra/" prefix needed, unlike the old combined-repo layout)
-
 trigger:
   tags:
     include:
       - infra-v*.*.*
+  branches:
+    exclude:
+      - "*"
 
 pool:
   vmImage: "ubuntu-latest"
@@ -45,8 +44,8 @@ stages:
                   --location southeastasia \
                   --template-file main.bicep \
                   --parameters environments/dev.bicepparam \
-                  --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
-                  --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri)
+                  --parameters ticketQrSigningKeyValue="$(ticketQrSigningKeyValue)" \
+                  --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUri)"
             displayName: "Preflight validate (dev)"
 
   # ===== 3. SECURITY SCAN =====
@@ -81,8 +80,8 @@ stages:
                   --location southeastasia \
                   --template-file main.bicep \
                   --parameters environments/dev.bicepparam \
-                  --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
-                  --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri) \
+                  --parameters ticketQrSigningKeyValue="$(ticketQrSigningKeyValue)" \
+                  --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUri)" \
                   --result-format FullResourcePayloads > whatif-output.txt
                 cat whatif-output.txt
                 if grep -q "Delete" whatif-output.txt; then
@@ -113,8 +112,8 @@ stages:
                         --location southeastasia \
                         --template-file main.bicep \
                         --parameters environments/dev.bicepparam \
-                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValue) \
-                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUri)
+                        --parameters ticketQrSigningKeyValue="$(ticketQrSigningKeyValue)" \
+                        --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUri)"
                   displayName: "az deployment sub create (dev)"
 
   # ===== 6. DEPLOY PROD (Approval Gate — exists but never approved) =====
@@ -139,13 +138,13 @@ stages:
                         --location southeastasia \
                         --template-file main.bicep \
                         --parameters environments/prod.bicepparam \
-                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValueProd) \
-                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUriProd)
+                        --parameters ticketQrSigningKeyValue="$(ticketQrSigningKeyValueProd)" \
+                        --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUriProd)"
 
                       az deployment sub create \
                         --location southeastasia \
                         --template-file main.bicep \
                         --parameters environments/prod.bicepparam \
-                        --parameters ticketQrSigningKeyValue=$(ticketQrSigningKeyValueProd) \
-                        --parameters keyVaultCertSecretUri=$(keyVaultCertSecretUriProd)
+                        --parameters ticketQrSigningKeyValue="$(ticketQrSigningKeyValueProd)" \
+                        --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUriProd)"
                   displayName: "What-If + Deploy (prod)"

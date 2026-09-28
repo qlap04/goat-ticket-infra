@@ -21,7 +21,7 @@ resource routeTableApp 'Microsoft.Network/routeTables@2025-01-01' = {
         name: 'route-to-pe'
         properties: {
           addressPrefix: '10.10.4.0/24'
-          nextHopType: 'VirtualNetwork'
+          nextHopType: 'VnetLocal'
         }
       }
     ]
@@ -38,7 +38,7 @@ resource routeTablePe 'Microsoft.Network/routeTables@2025-01-01' = {
         name: 'route-local'
         properties: {
           addressPrefix: '10.10.0.0/16'
-          nextHopType: 'VirtualNetwork'
+          nextHopType: 'VnetLocal'
         }
       }
     ]

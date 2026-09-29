@@ -242,6 +242,23 @@ module rbacModule 'modules/security/rbac.bicep' = {
   }
 }
 
+//appGatewayResourceModule
+module appGatewayResourceModule 'modules/gateway-firewall/appGatewayResource.bicep' = {
+  name: 'appGatewayResourceDeployment'
+  scope: rgNetwork
+  params: {
+    environment: environment
+    appGatewaySubnetId: vnetModule.outputs.snetAppGwResourceId
+    backendFqdn: appServiceModule.outputs.appServiceDefaultHostname
+    customDomain: customDomain
+    keyVaultCertSecretUri: keyVaultCertSecretUri
+    agwIdentityId: appGatewayModule.outputs.agwIdentityId
+    wafPolicyId: appGatewayModule.outputs.wafPolicyId
+    publicIpId: appGatewayModule.outputs.publicIpId
+  }
+  dependsOn: [rbacModule]
+}
+
 //Auditing module
 module sqlAuditingModule 'modules/database/sqlAuditing.bicep' = {
   name: 'sqlAuditingDeployment'
@@ -320,5 +337,5 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
 // ============================================================
 output resourceGroupNetworkName string = rgNetwork.name
 output resourceGroupAppName string = rgApp.name
-output appGatewayPublicIp string = appGatewayModule.outputs.appGatewayPublicIp
+output appGatewayPublicIp string = appGatewayModule.outputs.publicIpId
 output appServiceDefaultHostname string = appServiceModule.outputs.appServiceDefaultHostname

@@ -1,0 +1,3148 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.47.16.16243",
+      "templateHash": "11530666126876484129"
+    }
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment name: dev or prod."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "southeastasia",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "customDomain": {
+      "type": "string",
+      "defaultValue": "goatticket.com",
+      "metadata": {
+        "description": "Custom domain for the App Gateway multi-site listener"
+      }
+    },
+    "keyVaultCertSecretUri": {
+      "type": "string",
+      "metadata": {
+        "description": "URI of the TLS certificate secret in Key Vault, without version, for auto-rotation"
+      }
+    },
+    "ticketQrSigningKeyValue": {
+      "type": "securestring",
+      "metadata": {
+        "description": "RS256 private key value for signing ticket QR codes"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "vnetDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "11833853909251381283"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment name: dev or prod."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Azure region for all resources."
+              }
+            },
+            "vnetAddressPrefix": {
+              "type": "string",
+              "defaultValue": "10.10.0.0/16",
+              "metadata": {
+                "description": "VNet address space in CIDR"
+              }
+            }
+          },
+          "variables": {
+            "vnetName": "[format('vnet-goat-{0}', parameters('environment'))]",
+            "subnetDefinitions": [
+              {
+                "name": "snet-appgw",
+                "addressPrefix": "10.10.1.0/24"
+              },
+              {
+                "name": "snet-app",
+                "addressPrefix": "10.10.2.0/24"
+              },
+              {
+                "name": "snet-func",
+                "addressPrefix": "10.10.3.0/24"
+              },
+              {
+                "name": "snet-pe",
+                "addressPrefix": "10.10.4.0/24"
+              },
+              {
+                "name": "AzureFirewallSubnet",
+                "addressPrefix": "10.10.5.0/26"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('vnetName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "[parameters('vnetAddressPrefix')]"
+                  ]
+                }
+              }
+            },
+            {
+              "copy": {
+                "name": "subnets",
+                "count": "[length(variables('subnetDefinitions'))]"
+              },
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('vnetName'), variables('subnetDefinitions')[copyIndex()].name)]",
+              "properties": {
+                "addressPrefix": "[variables('subnetDefinitions')[copyIndex()].addressPrefix]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "snetAppGwResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetDefinitions')[0].name)]"
+            },
+            "snetAppResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetDefinitions')[1].name)]"
+            },
+            "snetFuncResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetDefinitions')[2].name)]"
+            },
+            "snetPeResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetDefinitions')[3].name)]"
+            },
+            "azureFirewallSubnetResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetDefinitions')[4].name)]"
+            },
+            "vnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "nsgDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "14109544526979362681"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for nsg"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('nsg-appgw-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "Allow-GatewayManager-Inbound",
+                    "properties": {
+                      "priority": 100,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourceAddressPrefix": "GatewayManager",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "65200-65535"
+                    }
+                  },
+                  {
+                    "name": "Allow-Https-Inbound",
+                    "properties": {
+                      "priority": 110,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourceAddressPrefix": "Internet",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "443"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('nsg-app-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "Deny-Internet-Inbound",
+                    "properties": {
+                      "priority": 200,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourceAddressPrefix": "Internet",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('nsg-func-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "Deny-All-Inbound",
+                    "properties": {
+                      "priority": 200,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourceAddressPrefix": "*",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('nsg-pe-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "Allow-From-VNet",
+                    "properties": {
+                      "priority": 100,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourceAddressPrefix": "VirtualNetwork",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRanges": [
+                        "443",
+                        "1433"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "Deny-Internet-Inbound",
+                    "properties": {
+                      "priority": 200,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourceAddressPrefix": "Internet",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "*"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "nsgAppGwId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-appgw-{0}', parameters('environment')))]"
+            },
+            "nsgAppId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-app-{0}', parameters('environment')))]"
+            },
+            "nsgFuncId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-func-{0}', parameters('environment')))]"
+            },
+            "nsgPeId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-pe-{0}', parameters('environment')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "routeTableDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "7261065506594217144"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for route tables"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/routeTables",
+              "apiVersion": "2025-01-01",
+              "name": "[format('rt-app-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "routes": [
+                  {
+                    "name": "route-to-pe",
+                    "properties": {
+                      "addressPrefix": "10.10.4.0/24",
+                      "nextHopType": "VnetLocal"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/routeTables",
+              "apiVersion": "2025-01-01",
+              "name": "[format('rt-pe-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "routes": [
+                  {
+                    "name": "route-local",
+                    "properties": {
+                      "addressPrefix": "10.10.0.0/16",
+                      "nextHopType": "VnetLocal"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "routeTableAppId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/routeTables', format('rt-app-{0}', parameters('environment')))]"
+            },
+            "routeTablePeId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/routeTables', format('rt-pe-{0}', parameters('environment')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "firewallPolicyDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "3653532301641640001"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for firewall policy"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/firewallPolicies",
+              "apiVersion": "2025-01-01",
+              "name": "[format('afwp-goat-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "tier": "Standard"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/firewallPolicies/ruleCollectionGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('afwp-goat-{0}', parameters('environment')), format('rcg-egress-{0}', parameters('environment')))]",
+              "properties": {
+                "priority": 200,
+                "ruleCollections": [
+                  {
+                    "ruleCollectionType": "FirewallPolicyFilterRuleCollection",
+                    "name": "AllowEgressFqdns",
+                    "priority": 100,
+                    "action": {
+                      "type": "Allow"
+                    },
+                    "rules": [
+                      {
+                        "ruleType": "ApplicationRule",
+                        "name": "allow-nuget",
+                        "protocols": [
+                          {
+                            "protocolType": "Https",
+                            "port": 443
+                          }
+                        ],
+                        "sourceAddresses": [
+                          "10.10.2.0/24",
+                          "10.10.3.0/24"
+                        ],
+                        "targetFqdns": [
+                          "api.nuget.org",
+                          "nuget.org"
+                        ]
+                      },
+                      {
+                        "ruleType": "ApplicationRule",
+                        "name": "allow-entra-id",
+                        "protocols": [
+                          {
+                            "protocolType": "Https",
+                            "port": 443
+                          }
+                        ],
+                        "sourceAddresses": [
+                          "10.10.2.0/24",
+                          "10.10.3.0/24"
+                        ],
+                        "targetFqdns": [
+                          "login.microsoftonline.com",
+                          "graph.microsoft.com"
+                        ]
+                      },
+                      {
+                        "ruleType": "ApplicationRule",
+                        "name": "allow-app-insights",
+                        "protocols": [
+                          {
+                            "protocolType": "Https",
+                            "port": 443
+                          }
+                        ],
+                        "sourceAddresses": [
+                          "10.10.2.0/24",
+                          "10.10.3.0/24"
+                        ],
+                        "targetFqdns": [
+                          "*.applicationinsights.azure.com",
+                          "*.monitor.azure.com"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/firewallPolicies', format('afwp-goat-{0}', parameters('environment')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "firewallPolicyId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/firewallPolicies', format('afwp-goat-{0}', parameters('environment')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "firewallDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "azureFirewallSubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.azureFirewallSubnetResourceId.value]"
+          },
+          "firewallPolicyId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'firewallPolicyDeployment'), '2025-04-01').outputs.firewallPolicyId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "11294935642527720927"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for firewall"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "azureFirewallSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of AzureFirewallSubnet, passed in from the network module output"
+              }
+            },
+            "firewallPolicyId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Firewall Policy, passed in from the firewallPolicy module output"
+              }
+            }
+          },
+          "variables": {
+            "firewallName": "[format('afw-goat-{0}', parameters('environment'))]",
+            "publicIpName": "[format('pip-fw-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('publicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Regional"
+              },
+              "properties": {
+                "ddosSettings": {
+                  "protectionMode": "VirtualNetworkInherited"
+                },
+                "idleTimeoutInMinutes": 4,
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Static"
+              }
+            },
+            {
+              "type": "Microsoft.Network/azureFirewalls",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('firewallName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "AZFW_VNet",
+                  "tier": "Standard"
+                },
+                "firewallPolicy": {
+                  "id": "[parameters('firewallPolicyId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "fw-ipconfig",
+                    "properties": {
+                      "subnet": {
+                        "id": "[parameters('azureFirewallSubnetId')]"
+                      },
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "firewallId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/azureFirewalls', variables('firewallName'))]"
+            },
+            "firewallPrivateIp": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/azureFirewalls', variables('firewallName')), '2025-01-01').ipConfigurations[0].properties.privateIPAddress]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'firewallPolicyDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "routeTableEgressDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "firewallPrivateIp": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'firewallDeployment'), '2025-04-01').outputs.firewallPrivateIp.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "14848256540699022173"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment"
+              }
+            },
+            "firewallPrivateIp": {
+              "type": "string",
+              "metadata": {
+                "description": "Private IP of the Azure Firewall"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/routeTables/routes",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('rt-app-{0}', parameters('environment')), 'route-internet')]",
+              "properties": {
+                "addressPrefix": "0.0.0.0/0",
+                "nextHopType": "VirtualAppliance",
+                "nextHopIpAddress": "[parameters('firewallPrivateIp')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'firewallDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'routeTableDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "storageDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "15804124901350921140"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Storage Accounts"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "variables": {
+            "runtimeStorageAccountName": "[format('stgrt{0}{1}', parameters('environment'), take(uniqueString(resourceGroup().id), 8))]",
+            "businessStorageAccountName": "[format('stgbiz{0}{1}', parameters('environment'), take(uniqueString(resourceGroup().id), 8))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('runtimeStorageAccountName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "allowBlobPublicAccess": false,
+                "allowSharedKeyAccess": false,
+                "publicNetworkAccess": "Disabled",
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "networkAcls": {
+                  "defaultAction": "Deny",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('businessStorageAccountName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "allowBlobPublicAccess": false,
+                "allowSharedKeyAccess": false,
+                "publicNetworkAccess": "Disabled",
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "networkAcls": {
+                  "defaultAction": "Deny",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('businessStorageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('businessStorageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}/{2}', variables('businessStorageAccountName'), 'default', 'tickets')]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('businessStorageAccountName'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/queueServices",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('businessStorageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('businessStorageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}/{2}', variables('businessStorageAccountName'), 'default', 'order-created')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/queueServices', variables('businessStorageAccountName'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}/{2}', variables('businessStorageAccountName'), 'default', 'seat-hold-queue')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/queueServices', variables('businessStorageAccountName'), 'default')]"
+              ]
+            }
+          ],
+          "outputs": {
+            "runtimeStorageAccountId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('runtimeStorageAccountName'))]"
+            },
+            "runtimeStorageAccountName": {
+              "type": "string",
+              "value": "[variables('runtimeStorageAccountName')]"
+            },
+            "businessStorageAccountId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('businessStorageAccountName'))]"
+            },
+            "businessStorageAccountName": {
+              "type": "string",
+              "value": "[variables('businessStorageAccountName')]"
+            },
+            "businessStorageAccountBlobEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('businessStorageAccountName')), '2025-01-01').primaryEndpoints.blob]"
+            },
+            "businessStorageAccountQueueEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('businessStorageAccountName')), '2025-01-01').primaryEndpoints.queue]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appInsightsDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "9319606476050785471"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Application Insights"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "variables": {
+            "appInsightsName": "[format('appi-goat-{0}', parameters('environment'))]",
+            "logAnalyticsWorkspaceName": "[format('log-goat-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2025-02-01",
+              "name": "[variables('logAnalyticsWorkspaceName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('appInsightsName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appInsightsId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "sqlDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "runtimeStorageAccountName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.runtimeStorageAccountName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "8148545482375615273"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for SQL Server"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "sqlAdminObjectId": {
+              "type": "string",
+              "defaultValue": "[deployer().objectId]",
+              "metadata": {
+                "description": "Entra ID object ID of the admin — defaults to whoever runs the deployment, override if needed"
+              }
+            },
+            "sqlAdminLogin": {
+              "type": "string",
+              "defaultValue": "[deployer().objectId]",
+              "metadata": {
+                "description": "Entra ID admin display name — defaults to the deployer objectId since Bicep deployer() has no userPrincipalName property, override with a real email/name if desired"
+              }
+            },
+            "runtimeStorageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage account name to write SQL audit logs to"
+              }
+            }
+          },
+          "variables": {
+            "sqlServerName": "[format('sql-goat-{0}', parameters('environment'))]",
+            "sqlDatabaseName": "sqldb-goat"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('sqlServerName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "administrators": {
+                  "administratorType": "ActiveDirectory",
+                  "azureADOnlyAuthentication": true,
+                  "login": "[parameters('sqlAdminLogin')]",
+                  "principalType": "User",
+                  "sid": "[parameters('sqlAdminObjectId')]",
+                  "tenantId": "[deployer().tenantId]"
+                },
+                "publicNetworkAccess": "Disabled",
+                "minimalTlsVersion": "1.2"
+              }
+            },
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), variables('sqlDatabaseName'))]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "S0",
+                "tier": "Standard"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/securityAlertPolicies",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), 'default')]",
+              "properties": {
+                "state": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/advancedThreatProtectionSettings",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), 'default')]",
+              "properties": {
+                "state": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]",
+                "[resourceId('Microsoft.Sql/servers/securityAlertPolicies', variables('sqlServerName'), 'default')]"
+              ]
+            }
+          ],
+          "outputs": {
+            "sqlServerId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+            },
+            "sqlServerFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2025-01-01').fullyQualifiedDomainName]"
+            },
+            "sqlDatabaseId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDatabaseName'))]"
+            },
+            "sqlServerPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2025-01-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cosmosDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "12481102581946235714"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Cosmos DB"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            }
+          },
+          "variables": {
+            "cosmosAccountName": "[format('cosmos-goat-{0}', parameters('environment'))]",
+            "databaseName": "goatticket",
+            "containerName": "catalog"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts",
+              "apiVersion": "2024-11-15",
+              "name": "[toLower(variables('cosmosAccountName'))]",
+              "location": "[parameters('location')]",
+              "kind": "GlobalDocumentDB",
+              "properties": {
+                "databaseAccountOfferType": "Standard",
+                "locations": [
+                  {
+                    "locationName": "[parameters('location')]",
+                    "failoverPriority": 0,
+                    "isZoneRedundant": false
+                  }
+                ],
+                "consistencyPolicy": {
+                  "defaultConsistencyLevel": "Session"
+                },
+                "publicNetworkAccess": "Disabled",
+                "disableLocalAuth": true,
+                "disableKeyBasedMetadataWriteAccess": true,
+                "ipRules": [],
+                "isVirtualNetworkFilterEnabled": true,
+                "capabilities": [
+                  {
+                    "name": "EnableServerless"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+              "apiVersion": "2024-11-15",
+              "name": "[format('{0}/{1}', toLower(variables('cosmosAccountName')), variables('databaseName'))]",
+              "properties": {
+                "resource": {
+                  "id": "[variables('databaseName')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', toLower(variables('cosmosAccountName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+              "apiVersion": "2024-11-15",
+              "name": "[format('{0}/{1}/{2}', toLower(variables('cosmosAccountName')), variables('databaseName'), variables('containerName'))]",
+              "properties": {
+                "resource": {
+                  "id": "[variables('containerName')]",
+                  "partitionKey": {
+                    "paths": [
+                      "/type"
+                    ],
+                    "kind": "Hash"
+                  },
+                  "indexingPolicy": {
+                    "indexingMode": "consistent",
+                    "includedPaths": [
+                      {
+                        "path": "/*"
+                      }
+                    ],
+                    "excludedPaths": [
+                      {
+                        "path": "/_etag/?"
+                      }
+                    ]
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', toLower(variables('cosmosAccountName')), variables('databaseName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "cosmosAccountId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.DocumentDB/databaseAccounts', toLower(variables('cosmosAccountName')))]"
+            },
+            "cosmosAccountEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', toLower(variables('cosmosAccountName'))), '2024-11-15').documentEndpoint]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyVaultDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "ticketQrSigningKeyValue": {
+            "value": "[parameters('ticketQrSigningKeyValue')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "17176743027796235642"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Key Vault"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "ticketQrSigningKeyValue": {
+              "type": "securestring",
+              "metadata": {
+                "description": "RS256 private key value for signing ticket QR codes"
+              }
+            }
+          },
+          "variables": {
+            "keyVaultName": "[format('kv-goat-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "publicNetworkAccess": "Disabled",
+                "accessPolicies": [],
+                "networkAcls": {
+                  "defaultAction": "Deny",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2024-11-01",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'TicketQrSigningKey')]",
+              "properties": {
+                "value": "[parameters('ticketQrSigningKeyValue')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "keyVaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[variables('keyVaultName')]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appServiceDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "appSubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.snetAppResourceId.value]"
+          },
+          "appInsightsConnectionString": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appInsightsDeployment'), '2025-04-01').outputs.appInsightsConnectionString.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "11884553870262486314"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for App Service"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "appSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of snet-app, for VNet Integration (outbound)"
+              }
+            },
+            "appInsightsConnectionString": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Application Insights connection string"
+              }
+            }
+          },
+          "variables": {
+            "appServicePlanName": "[format('plan-goat-{0}', parameters('environment'))]",
+            "appServiceName": "[format('app-goat-api-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('appServicePlanName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "B1",
+                "tier": "Basic"
+              },
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('appServiceName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "virtualNetworkSubnetId": "[parameters('appSubnetId')]",
+                "publicNetworkAccess": "Disabled",
+                "httpsOnly": true,
+                "siteConfig": {
+                  "linuxFxVersion": "DOTNETCORE|8.0",
+                  "alwaysOn": true,
+                  "ftpsState": "Disabled",
+                  "minTlsVersion": "1.2",
+                  "vnetRouteAllEnabled": true,
+                  "http20Enabled": true,
+                  "appSettings": [
+                    {
+                      "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                      "value": "[parameters('appInsightsConnectionString')]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appServiceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]"
+            },
+            "appServicePrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2024-11-01', 'full').identity.principalId]"
+            },
+            "appServiceDefaultHostname": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2024-11-01').defaultHostName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appInsightsDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "functionDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "funcSubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.snetFuncResourceId.value]"
+          },
+          "runtimeStorageAccountName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.runtimeStorageAccountName.value]"
+          },
+          "businessStorageAccountName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.businessStorageAccountName.value]"
+          },
+          "appInsightsConnectionString": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appInsightsDeployment'), '2025-04-01').outputs.appInsightsConnectionString.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "6638688415443312016"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Function App"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "funcSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of snet-func, for VNet Integration (outbound)"
+              }
+            },
+            "runtimeStorageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Account name for AzureWebJobsStorage (Function runtime internal storage)"
+              }
+            },
+            "businessStorageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Business Storage Account name — for blob (tickets) and queue (order-created, seat-hold-queue). Accessed via DefaultAzureCredential, not a connection string."
+              }
+            },
+            "appInsightsConnectionString": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Application Insights connection string"
+              }
+            }
+          },
+          "variables": {
+            "functionPlanName": "[format('plan-goat-func-{0}', parameters('environment'))]",
+            "functionAppName": "[format('func-goat-worker-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('functionPlanName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "B1",
+                "tier": "Basic"
+              },
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('functionAppName')]",
+              "location": "[parameters('location')]",
+              "kind": "functionapp,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('functionPlanName'))]",
+                "virtualNetworkSubnetId": "[parameters('funcSubnetId')]",
+                "publicNetworkAccess": "Disabled",
+                "httpsOnly": true,
+                "siteConfig": {
+                  "linuxFxVersion": "DOTNET-ISOLATED|8.0",
+                  "alwaysOn": true,
+                  "ftpsState": "Disabled",
+                  "minTlsVersion": "1.2",
+                  "vnetRouteAllEnabled": true,
+                  "http20Enabled": true,
+                  "appSettings": [
+                    {
+                      "name": "AzureWebJobsStorage__accountName",
+                      "value": "[parameters('runtimeStorageAccountName')]"
+                    },
+                    {
+                      "name": "AzureWebJobsStorage__credential",
+                      "value": "managedidentity"
+                    },
+                    {
+                      "name": "FUNCTIONS_EXTENSION_VERSION",
+                      "value": "~4"
+                    },
+                    {
+                      "name": "FUNCTIONS_WORKER_RUNTIME",
+                      "value": "dotnet-isolated"
+                    },
+                    {
+                      "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                      "value": "[parameters('appInsightsConnectionString')]"
+                    },
+                    {
+                      "name": "BusinessStorageAccountName",
+                      "value": "[parameters('businessStorageAccountName')]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('functionPlanName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "functionAppId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-11-01', 'full').identity.principalId]"
+            },
+            "functionAppDefaultHostname": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-11-01').defaultHostName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appInsightsDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appGatewayDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "appGatewaySubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.snetAppGwResourceId.value]"
+          },
+          "backendFqdn": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServiceDefaultHostname.value]"
+          },
+          "customDomain": {
+            "value": "[parameters('customDomain')]"
+          },
+          "keyVaultCertSecretUri": {
+            "value": "[parameters('keyVaultCertSecretUri')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "3766241145845134199"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for App Gateway"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "appGatewaySubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of snet-appgw, passed in from the network module output"
+              }
+            },
+            "backendFqdn": {
+              "type": "string",
+              "metadata": {
+                "description": "Backend App Service default hostname (FQDN)"
+              }
+            },
+            "customDomain": {
+              "type": "string",
+              "defaultValue": "goatticket.com",
+              "metadata": {
+                "description": "Custom domain for the multi-site listener"
+              }
+            },
+            "keyVaultCertSecretUri": {
+              "type": "string",
+              "metadata": {
+                "description": "URI of the certificate secret in Key Vault, without version, for auto-rotation"
+              }
+            }
+          },
+          "variables": {
+            "appGatewayName": "[format('agw-goat-{0}', parameters('environment'))]",
+            "publicIpName": "[format('pip-agw-{0}', parameters('environment'))]",
+            "wafPolicyName": "[format('wafp-goat-{0}', parameters('environment'))]",
+            "agwIdentityName": "[format('id-agw-{0}', parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[variables('agwIdentityName')]",
+              "location": "[parameters('location')]"
+            },
+            {
+              "type": "Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies",
+              "apiVersion": "2023-11-01",
+              "name": "[variables('wafPolicyName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "policySettings": {
+                  "mode": "Prevention",
+                  "state": "Enabled"
+                },
+                "managedRules": {
+                  "managedRuleSets": [
+                    {
+                      "ruleSetType": "OWASP",
+                      "ruleSetVersion": "3.2"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2023-11-01",
+              "name": "[variables('publicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static"
+              }
+            },
+            {
+              "type": "Microsoft.Network/applicationGateways",
+              "apiVersion": "2023-11-01",
+              "name": "[variables('appGatewayName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('agwIdentityName')))]": {}
+                }
+              },
+              "properties": {
+                "sku": {
+                  "name": "WAF_v2",
+                  "tier": "WAF_v2"
+                },
+                "firewallPolicy": {
+                  "id": "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
+                },
+                "sslPolicy": {
+                  "policyType": "Predefined",
+                  "policyName": "AppGwSslPolicy20220101S"
+                },
+                "autoscaleConfiguration": {
+                  "minCapacity": 1,
+                  "maxCapacity": 3
+                },
+                "gatewayIPConfigurations": [
+                  {
+                    "name": "appGwIpConfig",
+                    "properties": {
+                      "subnet": {
+                        "id": "[parameters('appGatewaySubnetId')]"
+                      }
+                    }
+                  }
+                ],
+                "frontendIPConfigurations": [
+                  {
+                    "name": "appGwFrontendIp",
+                    "properties": {
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]"
+                      }
+                    }
+                  }
+                ],
+                "frontendPorts": [
+                  {
+                    "name": "port443",
+                    "properties": {
+                      "port": 443
+                    }
+                  }
+                ],
+                "sslCertificates": [
+                  {
+                    "name": "cert-goatticket",
+                    "properties": {
+                      "keyVaultSecretId": "[parameters('keyVaultCertSecretUri')]"
+                    }
+                  }
+                ],
+                "backendAddressPools": [
+                  {
+                    "name": "pool-goatticket",
+                    "properties": {
+                      "backendAddresses": [
+                        {
+                          "fqdn": "[parameters('backendFqdn')]"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "backendHttpSettingsCollection": [
+                  {
+                    "name": "httpsettings-goatticket",
+                    "properties": {
+                      "port": 443,
+                      "protocol": "Https",
+                      "pickHostNameFromBackendAddress": true,
+                      "requestTimeout": 30
+                    }
+                  }
+                ],
+                "httpListeners": [
+                  {
+                    "name": "listener-goatticket",
+                    "properties": {
+                      "frontendIPConfiguration": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', variables('appGatewayName'), 'appGwFrontendIp')]"
+                      },
+                      "frontendPort": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/frontendPorts', variables('appGatewayName'), 'port443')]"
+                      },
+                      "protocol": "Https",
+                      "hostNames": [
+                        "[parameters('customDomain')]"
+                      ],
+                      "sslCertificate": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/sslCertificates', variables('appGatewayName'), 'cert-goatticket')]"
+                      }
+                    }
+                  }
+                ],
+                "requestRoutingRules": [
+                  {
+                    "name": "rule-goatticket",
+                    "properties": {
+                      "priority": 100,
+                      "ruleType": "Basic",
+                      "httpListener": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/httpListeners', variables('appGatewayName'), 'listener-goatticket')]"
+                      },
+                      "backendAddressPool": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', variables('appGatewayName'), 'pool-goatticket')]"
+                      },
+                      "backendHttpSettings": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', variables('appGatewayName'), 'httpsettings-goatticket')]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('agwIdentityName'))]",
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]",
+                "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appGatewayId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/applicationGateways', variables('appGatewayName'))]"
+            },
+            "appGatewayPublicIp": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName')), '2023-11-01').ipAddress]"
+            },
+            "agwIdentityId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('agwIdentityName'))]"
+            },
+            "agwIdentityPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('agwIdentityName')), '2023-01-31').principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "rbacDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appServicePrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServicePrincipalId.value]"
+          },
+          "functionAppPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'functionDeployment'), '2025-04-01').outputs.functionAppPrincipalId.value]"
+          },
+          "agwIdentityPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appGatewayDeployment'), '2025-04-01').outputs.agwIdentityPrincipalId.value]"
+          },
+          "sqlServerPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'sqlDeployment'), '2025-04-01').outputs.sqlServerPrincipalId.value]"
+          },
+          "keyVaultId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment'), '2025-04-01').outputs.keyVaultId.value]"
+          },
+          "cosmosAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'cosmosDeployment'), '2025-04-01').outputs.cosmosAccountId.value]"
+          },
+          "runtimeStorageAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.runtimeStorageAccountId.value]"
+          },
+          "businessStorageAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.businessStorageAccountId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "9570746076365932795"
+            }
+          },
+          "parameters": {
+            "appServicePrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "principalId of App Service Managed Identity"
+              }
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "principalId of Function App Managed Identity"
+              }
+            },
+            "agwIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "principalId of App Gateway User-Assigned Identity"
+              }
+            },
+            "keyVaultId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Key Vault"
+              }
+            },
+            "cosmosAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Cosmos DB account"
+              }
+            },
+            "runtimeStorageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Runtime Storage Account (Function internal state)"
+              }
+            },
+            "businessStorageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Business Storage Account (tickets blob + queues)"
+              }
+            },
+            "sqlServerPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "principalId of SQL Server Managed Identity"
+              }
+            }
+          },
+          "variables": {
+            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+            "storageBlobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+            "storageBlobDataOwnerRoleId": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+            "storageQueueDataContributorRoleId": "974c5e8b-45b9-4653-ba55-5f855dd0fb88",
+            "cosmosDataReaderRoleId": "00000000-0000-0000-0000-000000000001"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', last(split(parameters('keyVaultId'), '/')))]",
+              "name": "[guid(parameters('keyVaultId'), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('appServicePrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-11-15",
+              "name": "[format('{0}/{1}', last(split(parameters('cosmosAccountId'), '/')), guid(parameters('cosmosAccountId'), parameters('appServicePrincipalId'), variables('cosmosDataReaderRoleId')))]",
+              "properties": {
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', parameters('cosmosAccountId'), variables('cosmosDataReaderRoleId'))]",
+                "principalId": "[parameters('appServicePrincipalId')]",
+                "scope": "[parameters('cosmosAccountId')]"
+              }
+            },
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+              "apiVersion": "2024-11-15",
+              "name": "[format('{0}/{1}', last(split(parameters('cosmosAccountId'), '/')), guid(parameters('cosmosAccountId'), parameters('functionAppPrincipalId'), variables('cosmosDataReaderRoleId')))]",
+              "properties": {
+                "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/{1}', parameters('cosmosAccountId'), variables('cosmosDataReaderRoleId'))]",
+                "principalId": "[parameters('functionAppPrincipalId')]",
+                "scope": "[parameters('cosmosAccountId')]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', last(split(parameters('runtimeStorageAccountId'), '/')))]",
+              "name": "[guid(parameters('runtimeStorageAccountId'), parameters('functionAppPrincipalId'), variables('storageBlobDataOwnerRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('functionAppPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataOwnerRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', last(split(parameters('businessStorageAccountId'), '/')))]",
+              "name": "[guid(parameters('businessStorageAccountId'), parameters('functionAppPrincipalId'), variables('storageBlobDataContributorRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('functionAppPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', last(split(parameters('businessStorageAccountId'), '/')))]",
+              "name": "[guid(parameters('businessStorageAccountId'), parameters('functionAppPrincipalId'), variables('storageQueueDataContributorRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('functionAppPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageQueueDataContributorRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', last(split(parameters('keyVaultId'), '/')))]",
+              "name": "[guid(parameters('keyVaultId'), parameters('agwIdentityPrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('agwIdentityPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', last(split(parameters('runtimeStorageAccountId'), '/')))]",
+              "name": "[guid(parameters('runtimeStorageAccountId'), parameters('sqlServerPrincipalId'), variables('storageBlobDataContributorRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('sqlServerPrincipalId')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appGatewayDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'cosmosDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'functionDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'sqlDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "sqlAuditingDeployment",
+      "resourceGroup": "[format('rg-goat-app-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "sqlServerName": {
+            "value": "[format('sql-goat-{0}', parameters('environment'))]"
+          },
+          "runtimeStorageAccountName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.runtimeStorageAccountName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "13045722135944882679"
+            }
+          },
+          "parameters": {
+            "sqlServerName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the SQL Server (existing)"
+              }
+            },
+            "runtimeStorageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage account name to write SQL audit logs to"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers/auditingSettings",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', parameters('sqlServerName'), 'default')]",
+              "properties": {
+                "state": "Enabled",
+                "storageEndpoint": "[format('https://{0}.blob.core.windows.net', parameters('runtimeStorageAccountName'))]",
+                "isStorageSecondaryKeyInUse": false,
+                "isAzureMonitorTargetEnabled": true
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'rbacDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-app-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "privateDnsZonesDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "vnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.vnetId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "4482570759536694666"
+            }
+          },
+          "parameters": {
+            "vnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the VNet, for linking DNS zones"
+              }
+            }
+          },
+          "variables": {
+            "dnsZoneNames": [
+              "privatelink.database.windows.net",
+              "privatelink.documents.azure.com",
+              "privatelink.blob.core.windows.net",
+              "privatelink.queue.core.windows.net",
+              "privatelink.vaultcore.azure.net",
+              "privatelink.azurewebsites.net"
+            ]
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "dnsZones",
+                "count": "[length(variables('dnsZoneNames'))]"
+              },
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2024-06-01",
+              "name": "[variables('dnsZoneNames')[copyIndex()]]",
+              "location": "global"
+            },
+            {
+              "copy": {
+                "name": "dnsZoneLinks",
+                "count": "[length(variables('dnsZoneNames'))]"
+              },
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2024-06-01",
+              "name": "[format('{0}/{1}', variables('dnsZoneNames')[copyIndex()], format('link-{0}', variables('dnsZoneNames')[copyIndex()]))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('vnetId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('dnsZoneNames')[copyIndex()])]"
+              ]
+            }
+          ],
+          "outputs": {
+            "dnsZoneIds": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, length(variables('dnsZoneNames'))))]",
+                "input": "[resourceId('Microsoft.Network/privateDnsZones', variables('dnsZoneNames')[range(0, length(variables('dnsZoneNames')))[copyIndex()]])]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "privateEndpointsDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "peSubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment'), '2025-04-01').outputs.snetPeResourceId.value]"
+          },
+          "sqlServerId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'sqlDeployment'), '2025-04-01').outputs.sqlServerId.value]"
+          },
+          "cosmosAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'cosmosDeployment'), '2025-04-01').outputs.cosmosAccountId.value]"
+          },
+          "businessStorageAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.businessStorageAccountId.value]"
+          },
+          "runtimeStorageAccountId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment'), '2025-04-01').outputs.runtimeStorageAccountId.value]"
+          },
+          "keyVaultId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment'), '2025-04-01').outputs.keyVaultId.value]"
+          },
+          "appServiceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServiceId.value]"
+          },
+          "functionAppId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'functionDeployment'), '2025-04-01').outputs.functionAppId.value]"
+          },
+          "dnsZoneIds": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'privateDnsZonesDeployment'), '2025-04-01').outputs.dnsZoneIds.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "15810182517175178424"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment for Private Endpoints"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "location of a rg"
+              }
+            },
+            "peSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of snet-pe"
+              }
+            },
+            "sqlServerId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of SQL Server"
+              }
+            },
+            "cosmosAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of Cosmos DB account"
+              }
+            },
+            "businessStorageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Business Storage Account (tickets blob + queues)"
+              }
+            },
+            "runtimeStorageAccountId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Runtime Storage Account (Function internal state)"
+              }
+            },
+            "keyVaultId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of Key Vault"
+              }
+            },
+            "appServiceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of App Service"
+              }
+            },
+            "functionAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of Function App"
+              }
+            },
+            "dnsZoneIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Array of Private DNS Zone IDs, in order: [sql, cosmos, blob, queue, vault, sites]"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-sql-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-sql",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('sqlServerId')]",
+                      "groupIds": [
+                        "sqlServer"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-sql-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-sql",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[0]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-sql-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-cosmos-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-cosmos",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('cosmosAccountId')]",
+                      "groupIds": [
+                        "Sql"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-cosmos-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-cosmos",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[1]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-cosmos-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-business-storage-blob-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-business-storage-blob",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('businessStorageAccountId')]",
+                      "groupIds": [
+                        "blob"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-business-storage-blob-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-business-storage-blob",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[2]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-business-storage-blob-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-business-storage-queue-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-business-storage-queue",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('businessStorageAccountId')]",
+                      "groupIds": [
+                        "queue"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-business-storage-queue-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-business-storage-queue",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[3]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-business-storage-queue-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-runtime-storage-blob-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-runtime-storage-blob",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('runtimeStorageAccountId')]",
+                      "groupIds": [
+                        "blob"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-runtime-storage-blob-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-runtime-storage-blob",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[2]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-runtime-storage-blob-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-keyvault-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-keyvault",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('keyVaultId')]",
+                      "groupIds": [
+                        "vault"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-keyvault-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-keyvault",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[4]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-keyvault-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-app-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-app",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('appServiceId')]",
+                      "groupIds": [
+                        "sites"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-app-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-app",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[5]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-app-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2025-01-01",
+              "name": "[format('pe-func-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('peSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "conn-func",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('functionAppId')]",
+                      "groupIds": [
+                        "sites"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('pe-func-{0}', parameters('environment')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "config-func",
+                    "properties": {
+                      "privateDnsZoneId": "[parameters('dnsZoneIds')[5]]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', format('pe-func-{0}', parameters('environment')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "peSqlId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-sql-{0}', parameters('environment')))]"
+            },
+            "peCosmosId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-cosmos-{0}', parameters('environment')))]"
+            },
+            "peBusinessBlobId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-business-storage-blob-{0}', parameters('environment')))]"
+            },
+            "peBusinessQueueId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-business-storage-queue-{0}', parameters('environment')))]"
+            },
+            "peRuntimeBlobId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-runtime-storage-blob-{0}', parameters('environment')))]"
+            },
+            "peKeyVaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-keyvault-{0}', parameters('environment')))]"
+            },
+            "peAppServiceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-app-{0}', parameters('environment')))]"
+            },
+            "peFunctionId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', format('pe-func-{0}', parameters('environment')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'cosmosDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'functionDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'privateDnsZonesDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'sqlDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'storageDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "subnetAssociationDeployment",
+      "resourceGroup": "[format('rg-goat-network-{0}', parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "nsgAppGwId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'nsgDeployment'), '2025-04-01').outputs.nsgAppGwId.value]"
+          },
+          "nsgAppId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'nsgDeployment'), '2025-04-01').outputs.nsgAppId.value]"
+          },
+          "nsgFuncId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'nsgDeployment'), '2025-04-01').outputs.nsgFuncId.value]"
+          },
+          "nsgPeId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'nsgDeployment'), '2025-04-01').outputs.nsgPeId.value]"
+          },
+          "routeTableAppId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'routeTableDeployment'), '2025-04-01').outputs.routeTableAppId.value]"
+          },
+          "routeTablePeId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'routeTableDeployment'), '2025-04-01').outputs.routeTablePeId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "14111519038240198649"
+            }
+          },
+          "parameters": {
+            "environment": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment"
+              }
+            },
+            "nsgAppGwId": {
+              "type": "string"
+            },
+            "nsgAppId": {
+              "type": "string"
+            },
+            "nsgFuncId": {
+              "type": "string"
+            },
+            "nsgPeId": {
+              "type": "string"
+            },
+            "routeTableAppId": {
+              "type": "string"
+            },
+            "routeTablePeId": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('vnet-goat-{0}', parameters('environment')), 'snet-appgw')]",
+              "properties": {
+                "addressPrefix": "10.10.1.0/24",
+                "networkSecurityGroup": {
+                  "id": "[parameters('nsgAppGwId')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('vnet-goat-{0}', parameters('environment')), 'snet-app')]",
+              "properties": {
+                "addressPrefix": "10.10.2.0/24",
+                "networkSecurityGroup": {
+                  "id": "[parameters('nsgAppId')]"
+                },
+                "routeTable": {
+                  "id": "[parameters('routeTableAppId')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('vnet-goat-{0}', parameters('environment')), 'snet-func')]",
+              "properties": {
+                "addressPrefix": "10.10.3.0/24",
+                "networkSecurityGroup": {
+                  "id": "[parameters('nsgFuncId')]"
+                },
+                "routeTable": {
+                  "id": "[parameters('routeTableAppId')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', format('vnet-goat-{0}', parameters('environment')), 'snet-pe')]",
+              "properties": {
+                "addressPrefix": "10.10.4.0/24",
+                "networkSecurityGroup": {
+                  "id": "[parameters('nsgPeId')]"
+                },
+                "routeTable": {
+                  "id": "[parameters('routeTablePeId')]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appGatewayDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'functionDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'nsgDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'privateEndpointsDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-goat-network-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'routeTableEgressDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'routeTableDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'vnetDeployment')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupNetworkName": {
+      "type": "string",
+      "value": "[format('rg-goat-network-{0}', parameters('environment'))]"
+    },
+    "resourceGroupAppName": {
+      "type": "string",
+      "value": "[format('rg-goat-app-{0}', parameters('environment'))]"
+    },
+    "appGatewayPublicIp": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-network-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appGatewayDeployment'), '2025-04-01').outputs.appGatewayPublicIp.value]"
+    },
+    "appServiceDefaultHostname": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-goat-app-{0}', parameters('environment'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServiceDefaultHostname.value]"
+    }
+  }
+}

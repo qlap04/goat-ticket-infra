@@ -30,8 +30,8 @@ resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: functionPlanName
   location: location
   sku: {
-    name: 'EP1'
-    tier: 'ElasticPremium'
+    name: 'B1'
+    tier: 'Basic'
   }
   properties: {
     reserved: true

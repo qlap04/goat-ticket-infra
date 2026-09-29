@@ -24,6 +24,9 @@ param runtimeStorageAccountId string
 @description('Resource ID of the Business Storage Account (tickets blob + queues)')
 param businessStorageAccountId string
 
+@description('principalId of SQL Server Managed Identity')
+param sqlServerPrincipalId string
+
 // ===== Built-in role definition IDs =====
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
@@ -128,6 +131,20 @@ resource agwToKeyVault 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   properties: {
     principalId: agwIdentityPrincipalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// 
+resource sqlToRuntimeStorage 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(runtimeStorageAccountId, sqlServerPrincipalId, storageBlobDataContributorRoleId)
+  scope: runtimeStorageAccount
+  properties: {
+    principalId: sqlServerPrincipalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      storageBlobDataContributorRoleId
+    )
     principalType: 'ServicePrincipal'
   }
 }

@@ -234,6 +234,7 @@ module rbacModule 'modules/security/rbac.bicep' = {
     appServicePrincipalId: appServiceModule.outputs.appServicePrincipalId
     functionAppPrincipalId: functionModule.outputs.functionAppPrincipalId
     agwIdentityPrincipalId: appGatewayModule.outputs.agwIdentityPrincipalId
+    sqlServerPrincipalId: sqlModule.outputs.sqlServerPrincipalId
     keyVaultId: keyVaultModule.outputs.keyVaultId
     cosmosAccountId: cosmosModule.outputs.cosmosAccountId
     runtimeStorageAccountId: storageModule.outputs.runtimeStorageAccountId

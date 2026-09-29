@@ -40,9 +40,14 @@ resource subnets 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = [
   }
 ]
 
-output snetAppGwResourceId string = filter(subnets, s => s.name == 'snet-appgw')[0].id
-output snetAppResourceId string = filter(subnets, s => s.name == 'snet-app')[0].id
-output snetFuncResourceId string = filter(subnets, s => s.name == 'snet-func')[0].id
-output snetPeResourceId string = filter(subnets, s => s.name == 'snet-pe')[0].id
-output azureFirewallSubnetResourceId string = filter(subnets, s => s.name == 'AzureFirewallSubnet')[0].id
+// output snetAppGwResourceId string = filter(subnets, s => s.name == 'snet-appgw')[0].id
+// output snetAppResourceId string = filter(subnets, s => s.name == 'snet-app')[0].id
+// output snetFuncResourceId string = filter(subnets, s => s.name == 'snet-func')[0].id
+// output snetPeResourceId string = filter(subnets, s => s.name == 'snet-pe')[0].id
+// output azureFirewallSubnetResourceId string = filter(subnets, s => s.name == 'AzureFirewallSubnet')[0].id
+output snetAppGwResourceId string = subnets[0].id
+output snetAppResourceId string = subnets[1].id
+output snetFuncResourceId string = subnets[2].id
+output snetPeResourceId string = subnets[3].id
+output azureFirewallSubnetResourceId string = subnets[4].id
 output vnetId string = virtualNetwork.id

@@ -84,3 +84,4 @@ resource sqlServerAuditing 'Microsoft.Sql/servers/auditingSettings@2025-01-01' =
 output sqlServerId string = sqlServer.id
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseId string = sqlDatabase.id
+output sqlServerPrincipalId string = sqlServer.identity.principalId

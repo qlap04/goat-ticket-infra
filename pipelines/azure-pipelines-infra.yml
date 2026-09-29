@@ -104,6 +104,7 @@ stages:
           runOnce:
             deploy:
               steps:
+                - checkout: self
                 - task: AzureCLI@2
                   inputs:
                     azureSubscription: "goat-ticket-connection"
@@ -132,6 +133,7 @@ stages:
             deploy:
               steps:
                 - task: AzureCLI@2
+                - checkout: self
                   inputs:
                     azureSubscription: "goat-ticket-connection"
                     scriptType: "bash"

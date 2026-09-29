@@ -10,44 +10,80 @@ param location string = resourceGroup().location
 param vnetAddressPrefix string = '10.10.0.0/16'
 
 var vnetName = 'vnet-goat-${environment}'
-var subnetDefinitions = [
-  { name: 'snet-appgw', addressPrefix: '10.10.1.0/24' }
-  { name: 'snet-app', addressPrefix: '10.10.2.0/24' }
-  { name: 'snet-func', addressPrefix: '10.10.3.0/24' }
-  { name: 'snet-pe', addressPrefix: '10.10.4.0/24' }
-  { name: 'AzureFirewallSubnet', addressPrefix: '10.10.5.0/26' }
-]
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2025-01-01' = {
   name: vnetName
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        vnetAddressPrefix
-      ]
+      addressPrefixes: [vnetAddressPrefix]
     }
   }
 }
 
-resource subnets 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = [
-  for subnet in subnetDefinitions: {
-    name: subnet.name
-    parent: virtualNetwork
-    properties: {
-      addressPrefix: subnet.addressPrefix
-    }
+resource subnetAppGw 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
+  name: 'snet-appgw'
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: '10.10.1.0/24'
   }
-]
+}
 
-// output snetAppGwResourceId string = filter(subnets, s => s.name == 'snet-appgw')[0].id
-// output snetAppResourceId string = filter(subnets, s => s.name == 'snet-app')[0].id
-// output snetFuncResourceId string = filter(subnets, s => s.name == 'snet-func')[0].id
-// output snetPeResourceId string = filter(subnets, s => s.name == 'snet-pe')[0].id
-// output azureFirewallSubnetResourceId string = filter(subnets, s => s.name == 'AzureFirewallSubnet')[0].id
-output snetAppGwResourceId string = subnets[0].id
-output snetAppResourceId string = subnets[1].id
-output snetFuncResourceId string = subnets[2].id
-output snetPeResourceId string = subnets[3].id
-output azureFirewallSubnetResourceId string = subnets[4].id
+resource subnetApp 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
+  name: 'snet-app'
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: '10.10.2.0/24'
+    delegations: [
+      {
+        name: 'delegation-serverfarms'
+        properties: {
+          serviceName: 'Microsoft.Web/serverFarms'
+        }
+      }
+    ]
+  }
+  dependsOn: [subnetAppGw]
+}
+
+resource subnetFunc 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
+  name: 'snet-func'
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: '10.10.3.0/24'
+    delegations: [
+      {
+        name: 'delegation-serverfarms'
+        properties: {
+          serviceName: 'Microsoft.Web/serverFarms'
+        }
+      }
+    ]
+  }
+  dependsOn: [subnetApp]
+}
+
+resource subnetPe 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
+  name: 'snet-pe'
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: '10.10.4.0/24'
+  }
+  dependsOn: [subnetFunc]
+}
+
+resource subnetFirewall 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
+  name: 'AzureFirewallSubnet'
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: '10.10.5.0/26'
+  }
+  dependsOn: [subnetPe]
+}
+
+output snetAppGwResourceId string = subnetAppGw.id
+output snetAppResourceId string = subnetApp.id
+output snetFuncResourceId string = subnetFunc.id
+output snetPeResourceId string = subnetPe.id
+output azureFirewallSubnetResourceId string = subnetFirewall.id
 output vnetId string = virtualNetwork.id

@@ -1,6 +1,8 @@
 // modules/network/subnetAssociation.bicep
 // Associates NSG + RouteTable to the 4 subnets that need it — separate module because
 // main.bicep runs at subscription scope, but this needs resourceGroup scope.
+// IMPORTANT: subnet PUT replaces the whole properties object — delegations must be
+// re-declared here too, or they get wiped out by this second declaration.
 
 @description('Environment')
 @allowed(['dev', 'prod'])
@@ -33,6 +35,14 @@ resource snetAppUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = 
     addressPrefix: '10.10.2.0/24'
     networkSecurityGroup: { id: nsgAppId }
     routeTable: { id: routeTableAppId }
+    delegations: [
+      {
+        name: 'delegation-serverfarms'
+        properties: {
+          serviceName: 'Microsoft.Web/serverFarms'
+        }
+      }
+    ]
   }
 }
 
@@ -43,6 +53,14 @@ resource snetFuncUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' =
     addressPrefix: '10.10.3.0/24'
     networkSecurityGroup: { id: nsgFuncId }
     routeTable: { id: routeTableAppId }
+    delegations: [
+      {
+        name: 'delegation-serverfarms'
+        properties: {
+          serviceName: 'Microsoft.Web/serverFarms'
+        }
+      }
+    ]
   }
 }
 

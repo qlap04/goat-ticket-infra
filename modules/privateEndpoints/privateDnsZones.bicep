@@ -6,22 +6,22 @@
 param vnetId string
 
 var dnsZoneNames = [
-  'privatelink.database.windows.net'          // SQL
-  'privatelink.documents.azure.com'            // Cosmos
-  'privatelink.blob.core.windows.net'          // Storage Blob
-  'privatelink.queue.core.windows.net'         // Storage Queue
-  'privatelink.vaultcore.azure.net'            // Key Vault
-  'privatelink.azurewebsites.net'              // App Service + Function (shared)
+  'privatelink.database.windows.net' // SQL
+  'privatelink.documents.azure.com' // Cosmos
+  'privatelink.blob.core.windows.net' // Storage Blob
+  'privatelink.queue.core.windows.net' // Storage Queue
+  'privatelink.vaultcore.azure.net' // Key Vault
+  'privatelink.azurewebsites.net' // App Service + Function (shared)
 ]
 
-resource dnsZones 'Microsoft.Network/privateDnsZones@2025-01-01' = [
+resource dnsZones 'Microsoft.Network/privateDnsZones@2024-06-01' = [
   for zoneName in dnsZoneNames: {
     name: zoneName
-    location: 'global'   
+    location: 'global'
   }
 ]
 
-resource dnsZoneLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2025-01-01' = [
+resource dnsZoneLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [
   for (zoneName, i) in dnsZoneNames: {
     parent: dnsZones[i]
     name: 'link-${zoneName}'

@@ -26,7 +26,7 @@ param appInsightsConnectionString string
 var functionPlanName = 'plan-goat-func-${environment}'
 var functionAppName = 'func-goat-worker-${environment}'
 
-resource functionPlan 'Microsoft.Web/serverfarms@2025-01-01' = {
+resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: functionPlanName
   location: location
   sku: {
@@ -41,7 +41,7 @@ resource functionPlan 'Microsoft.Web/serverfarms@2025-01-01' = {
 // checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
 // checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID handles authentication for the API; Function has no public inbound
 // checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once a health check function exists
-resource functionApp 'Microsoft.Web/sites@2025-01-01' = {
+resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'

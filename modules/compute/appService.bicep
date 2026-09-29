@@ -19,7 +19,7 @@ param appInsightsConnectionString string
 var appServicePlanName = 'plan-goat-${environment}'
 var appServiceName = 'app-goat-api-${environment}'
 
-resource appServicePlan 'Microsoft.Web/serverfarms@2025-01-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: appServicePlanName
   location: location
   sku: {
@@ -30,10 +30,10 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2025-01-01' = {
   }
 }
 
-// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
+// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev envirorg ewwgwgnment, adds cost without benefit at this scale
 // checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID (Microsoft.Identity.Web) handles all authentication
 // checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once /api/health exists
-resource appService 'Microsoft.Web/sites@2025-01-01' = {
+resource appService 'Microsoft.Web/sites@2024-11-01' = {
   name: appServiceName
   location: location
   identity: {

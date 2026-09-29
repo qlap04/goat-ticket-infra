@@ -70,17 +70,6 @@ resource sqlServerAdvancedThreatProtection 'Microsoft.Sql/servers/advancedThreat
   ]
 }
 
-resource sqlServerAuditing 'Microsoft.Sql/servers/auditingSettings@2025-01-01' = {
-  parent: sqlServer
-  name: 'default'
-  properties: {
-    state: 'Enabled'
-    storageEndpoint: 'https://${runtimeStorageAccountName}.blob.core.windows.net'
-    isStorageSecondaryKeyInUse: false
-    isAzureMonitorTargetEnabled: true
-  }
-}
-
 output sqlServerId string = sqlServer.id
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseId string = sqlDatabase.id

@@ -242,6 +242,19 @@ module rbacModule 'modules/security/rbac.bicep' = {
   }
 }
 
+//Auditing module
+module sqlAuditingModule 'modules/database/sqlAuditing.bicep' = {
+  name: 'sqlAuditingDeployment'
+  scope: rgApp
+  params: {
+    sqlServerName: 'sql-goat-${environment}'
+    runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
+  }
+  dependsOn: [
+    rbacModule
+  ]
+}
+
 // ============================================================
 // 11. PRIVATE DNS ZONES
 // ============================================================

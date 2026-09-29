@@ -151,7 +151,6 @@ module sqlModule 'modules/database/sql.bicep' = {
   params: {
     environment: environment
     location: location
-    runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
     // sqlAdminObjectId / sqlAdminLogin intentionally NOT passed —
     // sql.bicep defaults them to deployer().objectId / deployer().userPrincipalName,
     // so whoever (or whichever pipeline Service Principal) runs the deployment
@@ -217,10 +216,6 @@ module appGatewayModule 'modules/gateway-firewall/appGateway.bicep' = {
   params: {
     environment: environment
     location: location
-    appGatewaySubnetId: vnetModule.outputs.snetAppGwResourceId
-    backendFqdn: appServiceModule.outputs.appServiceDefaultHostname
-    customDomain: customDomain
-    keyVaultCertSecretUri: keyVaultCertSecretUri
   }
 }
 
@@ -325,6 +320,7 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
   dependsOn: [
     vnetModule
     appGatewayModule
+    appGatewayResourceModule
     appServiceModule
     functionModule
     routeTableEgressModule
@@ -337,5 +333,5 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
 // ============================================================
 output resourceGroupNetworkName string = rgNetwork.name
 output resourceGroupAppName string = rgApp.name
-output appGatewayPublicIp string = appGatewayModule.outputs.publicIpId
+output appGatewayPublicIp string = appGatewayResourceModule.outputs.appGatewayPublicIp
 output appServiceDefaultHostname string = appServiceModule.outputs.appServiceDefaultHostname

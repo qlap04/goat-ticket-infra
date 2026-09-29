@@ -15,9 +15,6 @@ param sqlAdminObjectId string = deployer().objectId
 @description('Entra ID admin display name — defaults to the deployer objectId since Bicep deployer() has no userPrincipalName property, override with a real email/name if desired')
 param sqlAdminLogin string = deployer().objectId
 
-@description('Storage account name to write SQL audit logs to')
-param runtimeStorageAccountName string
-
 var sqlServerName = 'sql-goat-${environment}'
 var sqlDatabaseName = 'sqldb-goat'
 

@@ -8,18 +8,6 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
-@description('Resource ID of snet-appgw, passed in from the network module output')
-param appGatewaySubnetId string
-
-@description('Backend App Service default hostname (FQDN)')
-param backendFqdn string
-
-@description('Custom domain for the multi-site listener')
-param customDomain string = 'goatticket.com'
-
-@description('URI of the certificate secret in Key Vault, without version, for auto-rotation')
-param keyVaultCertSecretUri string
-
 var publicIpName = 'pip-agw-${environment}'
 var wafPolicyName = 'wafp-goat-${environment}'
 var agwIdentityName = 'id-agw-${environment}'

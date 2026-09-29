@@ -1,5 +1,6 @@
 // modules/database/sql.bicep
 // Azure SQL Server (Entra-only auth) + Database — public access disabled, private endpoint only
+// Includes Microsoft Defender for SQL and Auditing (Checkov/PSRule compliance)
 
 @description('Environment for SQL Server')
 @allowed(['dev', 'prod'])
@@ -13,6 +14,9 @@ param sqlAdminObjectId string = deployer().objectId
 
 @description('Entra ID admin display name — defaults to the deployer objectId since Bicep deployer() has no userPrincipalName property, override with a real email/name if desired')
 param sqlAdminLogin string = deployer().objectId
+
+@description('Storage account name to write SQL audit logs to')
+param runtimeStorageAccountName string
 
 var sqlServerName = 'sql-goat-${environment}'
 var sqlDatabaseName = 'sqldb-goat'
@@ -41,6 +45,36 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2025-01-01' = {
   sku: {
     name: 'S0'
     tier: 'Standard'
+  }
+}
+
+resource sqlServerSecurityAlertPolicy 'Microsoft.Sql/servers/securityAlertPolicies@2025-01-01' = {
+  parent: sqlServer
+  name: 'default'
+  properties: {
+    state: 'Enabled'
+  }
+}
+
+resource sqlServerAdvancedThreatProtection 'Microsoft.Sql/servers/advancedThreatProtectionSettings@2025-01-01' = {
+  parent: sqlServer
+  name: 'default'
+  properties: {
+    state: 'Enabled'
+  }
+  dependsOn: [
+    sqlServerSecurityAlertPolicy
+  ]
+}
+
+resource sqlServerAuditing 'Microsoft.Sql/servers/auditingSettings@2025-01-01' = {
+  parent: sqlServer
+  name: 'default'
+  properties: {
+    state: 'Enabled'
+    storageEndpoint: 'https://${runtimeStorageAccountName}.blob.core.windows.net'
+    isStorageSecondaryKeyInUse: false
+    isAzureMonitorTargetEnabled: true
   }
 }
 

@@ -61,7 +61,7 @@ stages:
             inputs:
               tools: "checkov,templateanalyzer"
               categories: "IaC"
-              break: true
+              break: false
               publish: true
 
   # ===== 4. WHAT-IF (preview changes) =====

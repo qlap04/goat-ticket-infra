@@ -319,11 +319,23 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
   }
   dependsOn: [
     vnetModule
-    appGatewayModule
-    appGatewayResourceModule
+    nsgModule
+    routeTableModule
+    firewallPolicyModule
+    firewallModule
+    routeTableEgressModule
+    storageModule
+    appInsightsModule
+    sqlModule
+    cosmosModule
+    keyVaultModule
     appServiceModule
     functionModule
-    routeTableEgressModule
+    appGatewayModule
+    rbacModule
+    appGatewayResourceModule
+    sqlAuditingModule
+    privateDnsZonesModule
     privateEndpointsModule
   ]
 }

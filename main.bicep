@@ -151,6 +151,7 @@ module sqlModule 'modules/database/sql.bicep' = {
   params: {
     environment: environment
     location: location
+    runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
     // sqlAdminObjectId / sqlAdminLogin intentionally NOT passed —
     // sql.bicep defaults them to deployer().objectId / deployer().userPrincipalName,
     // so whoever (or whichever pipeline Service Principal) runs the deployment

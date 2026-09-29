@@ -292,6 +292,7 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
     routeTablePeId: routeTableModule.outputs.routeTablePeId
   }
   dependsOn: [
+    vnetModule
     appGatewayModule
     appServiceModule
     functionModule

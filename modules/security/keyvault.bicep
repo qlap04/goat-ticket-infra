@@ -15,7 +15,7 @@ param ticketQrSigningKeyValue string
 
 var keyVaultName = 'kv-goat-${environment}'
 
-resource keyVault 'Microsoft.KeyVault/vaults@2025-01-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
   name: keyVaultName
   location: location
   properties: {
@@ -34,7 +34,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2025-01-01' = {
   }
 }
 
-resource ticketQrSigningKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-01-01' = {
+resource ticketQrSigningKeySecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
   parent: keyVault
   name: 'TicketQrSigningKey'
   properties: {

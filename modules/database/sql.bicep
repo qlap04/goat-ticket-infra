@@ -24,6 +24,9 @@ var sqlDatabaseName = 'sqldb-goat'
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
   name: sqlServerName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     administrators: {
       administratorType: 'ActiveDirectory'

@@ -13,7 +13,7 @@ var cosmosAccountName = 'cosmos-goat-${environment}'
 var databaseName = 'goatticket'
 var containerName = 'catalog'
 
-resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-01-01' = {
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
   name: toLower(cosmosAccountName)
   location: location
   kind: 'GlobalDocumentDB'
@@ -40,7 +40,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-01-01' = {
   }
 }
 
-resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2025-01-01' = {
+resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-11-15' = {
   parent: cosmosAccount
   name: databaseName
   properties: {
@@ -50,7 +50,7 @@ resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2025-01-01
   }
 }
 
-resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-01-01' = {
+resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = {
   parent: database
   name: containerName
   properties: {

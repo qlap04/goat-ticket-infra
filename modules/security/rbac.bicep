@@ -32,11 +32,11 @@ var storageQueueDataContributorRoleId = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 var cosmosDataReaderRoleId = '00000000-0000-0000-0000-000000000001'
 
 // ===== existing references =====
-resource keyVault 'Microsoft.KeyVault/vaults@2025-01-01' existing = {
+resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: last(split(keyVaultId, '/'))
 }
 
-resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-01-01' existing = {
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
   name: last(split(cosmosAccountId, '/'))
 }
 
@@ -60,7 +60,7 @@ resource appToKeyVault 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 // ===== 2. MI-app → Cosmos (Data Reader) — Cosmos data-plane RBAC, different resource type =====
-resource appToCosmosReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-01-01' = {
+resource appToCosmosReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
   parent: cosmosAccount
   name: guid(cosmosAccountId, appServicePrincipalId, cosmosDataReaderRoleId)
   properties: {
@@ -71,7 +71,7 @@ resource appToCosmosReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignm
 }
 
 // ===== 3. MI-func → Cosmos (Data Reader) =====
-resource funcToCosmosReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-01-01' = {
+resource funcToCosmosReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
   parent: cosmosAccount
   name: guid(cosmosAccountId, functionAppPrincipalId, cosmosDataReaderRoleId)
   properties: {

@@ -1,0 +1,4 @@
+rule:
+  exclude:
+    - Azure.SQL.DefenderCloud
+    - Azure.SQL.Auditing

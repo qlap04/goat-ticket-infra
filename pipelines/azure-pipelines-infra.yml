@@ -1,4 +1,4 @@
-name: 'Infra Deploy - $(Build.SourceBranchName)'
+name: "Infra Deploy - $(Build.SourceBranchName)"
 
 trigger:
   tags:
@@ -122,10 +122,27 @@ stages:
                         --parameters keyVaultCertSecretUri="$(keyVaultCertSecretUri)"
                   displayName: "az deployment sub create (dev)"
 
-  # ===== 6. DEPLOY PROD (Approval Gate — exists but never approved) =====
+  # ===== 6. MANUAL GATE — confirm before touching Prod =====
+  - stage: ConfirmProd
+    displayName: "Confirm Deploy to Prod?"
+    dependsOn: DeployDev
+    jobs:
+      - job: WaitForValidation
+        pool: server
+        timeoutInMinutes: 4320
+        steps:
+          - task: ManualValidation@0
+            timeoutInMinutes: 4320
+            inputs:
+              notifyUsers: |
+                qlap04@gmail.com
+              instructions: "Do you want to deploy INFRASTRUCTURE to PRODUCTION? This creates real billable Azure resources (Firewall, App Gateway, SQL, Cosmos...). Review the Dev deployment above before confirming."
+              onTimeout: "reject"
+
+  # ===== 7. DEPLOY PROD (Approval Gate — exists but never approved) =====
   - stage: DeployProd
     displayName: "Deploy to Prod"
-    dependsOn: DeployDev
+    dependsOn: ConfirmProd
     condition: succeeded()
     jobs:
       - deployment: DeployInfraProd

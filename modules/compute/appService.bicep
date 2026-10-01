@@ -57,6 +57,10 @@ resource appService 'Microsoft.Web/sites@2024-11-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsightsConnectionString
         }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
       ]
     }
   }

@@ -1,8 +1,4 @@
 // modules/network/subnetAssociation.bicep
-// Associates NSG + RouteTable to the 4 subnets that need it — separate module because
-// main.bicep runs at subscription scope, but this needs resourceGroup scope.
-// IMPORTANT: subnet PUT replaces the whole properties object — delegations must be
-// re-declared here too, or they get wiped out by this second declaration.
 
 @description('Environment')
 @allowed(['dev', 'prod'])
@@ -25,6 +21,9 @@ resource snetAppGwUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' 
   properties: {
     addressPrefix: '10.10.1.0/24'
     networkSecurityGroup: { id: nsgAppGwId }
+    serviceEndpoints: [
+      { service: 'Microsoft.KeyVault' }
+    ]
   }
 }
 
@@ -36,14 +35,12 @@ resource snetAppUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = 
     networkSecurityGroup: { id: nsgAppId }
     routeTable: { id: routeTableAppId }
     delegations: [
-      {
-        name: 'delegation-serverfarms'
-        properties: {
-          serviceName: 'Microsoft.Web/serverFarms'
-        }
-      }
+      { name: 'delegation-serverfarms', properties: { serviceName: 'Microsoft.Web/serverFarms' } }
     ]
   }
+  dependsOn: [
+    snetAppGwUpdate
+  ]
 }
 
 resource snetFuncUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
@@ -54,14 +51,12 @@ resource snetFuncUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' =
     networkSecurityGroup: { id: nsgFuncId }
     routeTable: { id: routeTableAppId }
     delegations: [
-      {
-        name: 'delegation-serverfarms'
-        properties: {
-          serviceName: 'Microsoft.Web/serverFarms'
-        }
-      }
+      { name: 'delegation-serverfarms', properties: { serviceName: 'Microsoft.Web/serverFarms' } }
     ]
   }
+  dependsOn: [
+    snetAppUpdate
+  ]
 }
 
 resource snetPeUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
@@ -72,4 +67,7 @@ resource snetPeUpdate 'Microsoft.Network/virtualNetworks/subnets@2025-01-01' = {
     networkSecurityGroup: { id: nsgPeId }
     routeTable: { id: routeTablePeId }
   }
+  dependsOn: [
+    snetFuncUpdate
+  ]
 }

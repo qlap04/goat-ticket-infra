@@ -104,6 +104,19 @@ resource appGateway 'Microsoft.Network/applicationGateways@2023-11-01' = {
         }
       }
     ]
+    probes: [
+      {
+        name: 'probe-goatticket'
+        properties: {
+          protocol: 'Https'
+          path: '/swagger/index.html'
+          interval: 30
+          timeout: 30
+          unhealthyThreshold: 3
+          pickHostNameFromBackendHttpSettings: true
+        }
+      }
+    ]
   }
 }
 

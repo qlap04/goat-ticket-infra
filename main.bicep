@@ -191,6 +191,9 @@ module appServiceModule 'modules/compute/appService.bicep' = {
     location: location
     appSubnetId: vnetModule.outputs.snetAppResourceId
     appInsightsConnectionString: appInsightsModule.outputs.appInsightsConnectionString
+    tenantId: subscription().tenantId
+    apiClientId: '8cfb29cb-926b-4a7c-8cf4-ed1fe6d3cf0c'
+    swaggerClientId: '42dbeb33-c1a4-47a2-a135-cef955ede2d0'
   }
 }
 

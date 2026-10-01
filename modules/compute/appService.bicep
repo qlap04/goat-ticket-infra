@@ -16,6 +16,15 @@ param appSubnetId string
 @secure()
 param appInsightsConnectionString string
 
+@description('Entra ID tenant ID')
+param tenantId string
+
+@description('Client ID of the API app registration')
+param apiClientId string
+
+@description('Client ID of the Swagger UI app registration')
+param swaggerClientId string
+
 var appServicePlanName = 'plan-goat-${environment}'
 var appServiceName = 'app-goat-api-${environment}'
 
@@ -53,14 +62,16 @@ resource appService 'Microsoft.Web/sites@2024-11-01' = {
       vnetRouteAllEnabled: true
       http20Enabled: true
       appSettings: [
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsightsConnectionString
-        }
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+        { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
+        { name: 'ASPNETCORE_ENVIRONMENT', value: 'Development' }
+        { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
+        { name: 'AzureAd__TenantId', value: tenantId }
+        { name: 'AzureAd__ClientId', value: apiClientId }
+        { name: 'AzureAd__Audience', value: 'api://${apiClientId}' }
+        { name: 'SwaggerOAuth__TenantId', value: tenantId }
+        { name: 'SwaggerOAuth__ClientId', value: swaggerClientId }
+        { name: 'SwaggerOAuth__Scope', value: 'api://${apiClientId}/access_as_user' }
       ]
     }
   }

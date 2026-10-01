@@ -50,10 +50,32 @@ resource appGateway 'Microsoft.Network/applicationGateways@2023-11-01' = {
     backendAddressPools: [
       { name: 'pool-goatticket', properties: { backendAddresses: [{ fqdn: backendFqdn }] } }
     ]
+    probes: [
+      {
+        name: 'probe-goatticket'
+        properties: {
+          protocol: 'Https'
+          path: '/swagger/index.html'
+          interval: 30
+          timeout: 30
+          unhealthyThreshold: 3
+          pickHostNameFromBackendHttpSettings: false
+          host: backendFqdn
+        }
+      }
+    ]
     backendHttpSettingsCollection: [
       {
         name: 'httpsettings-goatticket'
-        properties: { port: 443, protocol: 'Https', pickHostNameFromBackendAddress: true, requestTimeout: 30 }
+        properties: {
+          port: 443
+          protocol: 'Https'
+          pickHostNameFromBackendAddress: true
+          requestTimeout: 30
+          probe: {
+            id: resourceId('Microsoft.Network/applicationGateways/probes', appGatewayName, 'probe-goatticket')
+          }
+        }
       }
     ]
     httpListeners: [
@@ -101,19 +123,6 @@ resource appGateway 'Microsoft.Network/applicationGateways@2023-11-01' = {
               'httpsettings-goatticket'
             )
           }
-        }
-      }
-    ]
-    probes: [
-      {
-        name: 'probe-goatticket'
-        properties: {
-          protocol: 'Https'
-          path: '/swagger/index.html'
-          interval: 30
-          timeout: 30
-          unhealthyThreshold: 3
-          pickHostNameFromBackendHttpSettings: true
         }
       }
     ]

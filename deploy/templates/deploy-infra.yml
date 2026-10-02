@@ -13,8 +13,8 @@ steps:
       inlineScript: |
         az deployment sub create \
           --location southeastasia \
-          --template-file "$(Pipeline.Workspace)/s/InfraRepo/deploy/bicep/main.bicep" \
-          --parameters "$(Pipeline.Workspace)/s/InfraRepo/deploy/variables/${{ parameters.environment }}.bicepparam"
+          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
+          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam"
     env:
       TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
       KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

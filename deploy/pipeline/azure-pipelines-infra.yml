@@ -34,6 +34,7 @@ stages:
             env:
               TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
               KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+
           - task: MicrosoftSecurityDevOps@1
             displayName: "Scan infrastructure code for security issues"
             inputs:
@@ -41,6 +42,7 @@ stages:
               categories: "IaC"
               break: false
               publish: true
+              
           - task: AzureCLI@2
             displayName: "Preview infrastructure changes before deploying"
             inputs:

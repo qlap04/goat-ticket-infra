@@ -1,0 +1,71 @@
+name: "Infra Deploy - $(Build.SourceBranchName)"
+
+trigger:
+  tags:
+    include:
+      - infra-v*.*.*
+  branches:
+    exclude:
+      - "*"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  - group: goat-ticket-secrets-dev
+
+stages:
+  # ===== 1. QUALITY CHECKS (lint, validate, security scan, what-if — one stage, four steps) =====
+  - stage: QualityChecks
+    displayName: "Run infrastructure quality checks"
+    jobs:
+      - job: QualityChecks
+        steps:
+          - script: bash deploy/script/lint-bicep.sh
+            displayName: "Check infrastructure code for syntax errors"
+          - task: AzureCLI@2
+            displayName: "Validate infrastructure changes against Azure"
+            inputs:
+              azureSubscription: "goat-ticket-connection"
+              scriptType: "bash"
+              scriptLocation: "scriptPath"
+              scriptPath: "deploy/script/validate-deployment.sh"
+              arguments: "dev deploy/variables/dev.bicepparam"
+            env:
+              TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+              KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+          - task: MicrosoftSecurityDevOps@1
+            displayName: "Scan infrastructure code for security issues"
+            inputs:
+              tools: "checkov,templateanalyzer"
+              categories: "IaC"
+              break: false
+              publish: true
+          - task: AzureCLI@2
+            displayName: "Preview infrastructure changes before deploying"
+            inputs:
+              azureSubscription: "goat-ticket-connection"
+              scriptType: "bash"
+              scriptLocation: "scriptPath"
+              scriptPath: "deploy/script/preview-changes.sh"
+              arguments: "dev deploy/variables/dev.bicepparam"
+            env:
+              TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+              KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+          - publish: whatif-output.txt
+            artifact: whatif-report
+
+
+  # ===== 2. DEPLOY DEV =====
+  - template: templates/deploy-environment.yml
+    parameters:
+      environment: dev
+      dependsOn: QualityChecks
+
+
+
+  # ===== 3. DEPLOY PROD (gated by the goat-prod Environment's native Approval check) =====
+  - template: templates/deploy-environment.yml
+    parameters:
+      environment: prod
+      dependsOn: Deploydev

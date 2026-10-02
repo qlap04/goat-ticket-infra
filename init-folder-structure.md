@@ -1,3 +1,8 @@
+> **Superseded**: This document describes the original flat `modules/`/`pipelines/`/`environments/`
+> bootstrap layout, which was replaced by the `deploy/{bicep,pipeline,script,variables}` structure
+> in the infra-pipeline-refactor feature (see `specs/001-infra-pipeline-refactor/`). See `README.md`
+> for the current structure. Kept here for historical reference only.
+
 # Init Folder Structure — GOAT Ticket Infra
 
 Generate the following folder structure and empty placeholder files under `infra/` at the repo root.

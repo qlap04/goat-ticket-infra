@@ -1,0 +1,2 @@
+using '../bicep/main.bicep'
+

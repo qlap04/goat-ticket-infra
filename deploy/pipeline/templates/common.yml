@@ -1,0 +1,19 @@
+# common.yml —
+steps:
+  - task: AzureCLI@2
+    displayName: "Login to Azure and verify subscription"
+    inputs:
+      azureSubscription: "goat-ticket-connection"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az account show --query "{Name:name, Id:id}" -o table
+
+  - task: AzureCLI@2
+    displayName: "Check resource group exists"
+    inputs:
+      azureSubscription: "goat-ticket-connection"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az group show --name rg-goat-app-dev --query "name" -o tsv

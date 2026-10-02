@@ -1,7 +1,7 @@
-# deploy-infra.yml
 parameters:
-  type: string
-  default: "dev"
+  - name: environment
+    type: string
+    default: "dev"
 
 steps:
   - task: AzureCLI@2

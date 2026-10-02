@@ -4,6 +4,49 @@ parameters:
     default: "dev"
 
 steps:
+  - script: |
+      find $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep -name "*.bicep" | while read file; do
+        echo "Linting: $file"
+        az bicep build --file "$file" --stdout > /dev/null || exit 1
+      done
+      echo "All Bicep files passed lint."
+    displayName: "Check infrastructure code for syntax errors"
+
+  - task: AzureCLI@2
+    displayName: "Validate infrastructure changes against Azure"
+    inputs:
+      azureSubscription: "goat-ticket-connection"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az deployment sub validate \
+          --location southeastasia \
+          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
+          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam"
+    env:
+      TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+      KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+
+  - task: AzureCLI@2
+    displayName: "Preview infrastructure changes before deploying"
+    inputs:
+      azureSubscription: "goat-ticket-connection"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az deployment sub what-if \
+          --location southeastasia \
+          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
+          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam" \
+          --result-format FullResourcePayloads > whatif-output.txt
+        cat whatif-output.txt
+        if grep -q "Delete" whatif-output.txt; then
+          echo "##vso[task.logissue type=warning]What-If detected resource DELETIONS — review carefully."
+        fi
+    env:
+      TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+      KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+
   - task: AzureCLI@2
     displayName: "Deploy infrastructure to the ${{ parameters.environment }} environment"
     inputs:

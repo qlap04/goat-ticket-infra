@@ -61,8 +61,6 @@ jobs:
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
-          
-
 
   # ===== Job 2: GATE Yes/No =====
   - job: InfraGate_${{ parameters.environment }}
@@ -77,8 +75,6 @@ jobs:
         inputs:
           instructions: "Review the preview result in the log of job Infra checks. Resume to deploy infrastructure, Reject to skip it."
           onTimeout: reject
-
-
 
   # ===== Job 3: DEPLOY =====
   - job: InfraDeploy_${{ parameters.environment }}

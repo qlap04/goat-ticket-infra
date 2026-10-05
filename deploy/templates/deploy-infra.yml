@@ -1,63 +1,105 @@
 parameters:
-  - name: environment
+  - name: environment # dev, sit, uat, preprod, prod
     type: string
-    default: "dev"
+  - name: target
+    type: string
+  - name: dependsOn
+    type: object
+    default: []
+  - name: azureSubscription
+    type: string
+    default: goat-ticket-connection
+  - name: subscriptionId
+    type: string
+    default: 919a17b8-76d4-471b-9c13-d1370b6e1da2
+  - name: location
+    type: string
+    default: southeastasia
 
-steps:
-  - script: |
-      find $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep -name "*.bicep" | while read file; do
-        echo "Linting: $file"
-        az bicep build --file "$file" --stdout > /dev/null || exit 1
-      done
-      echo "All Bicep files passed lint."
-    displayName: "Check infrastructure code for syntax errors"
+jobs:
+  # ===== Job 1: INFRA CHECK =====
+  - job: InfraChecks_${{ parameters.environment }}
+    displayName: "Check infrastructure changes for ${{ parameters.environment }}"
+    dependsOn: ${{ parameters.dependsOn }}
+    steps:
+      #VALIDATE
+      - task: BicepDeploy@0
+        displayName: "Validate infrastructure changes against Azure"
+        inputs:
+          type: deployment
+          operation: validate
+          scope: subscription
+          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
+          subscriptionId: ${{ parameters.subscriptionId }}
+          location: ${{ parameters.location }}
+          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+        env:
+          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-  - task: AzureCLI@2
-    displayName: "Validate infrastructure changes against Azure"
-    inputs:
-      azureSubscription: "goat-ticket-connection"
-      scriptType: "bash"
-      scriptLocation: "inlineScript"
-      inlineScript: |
-        az deployment sub validate \
-          --location southeastasia \
-          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
-          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam"
-    env:
-      TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-      KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+      #SECURITY
+      - task: MicrosoftSecurityDevOps@1
+        displayName: "Scan infrastructure code for security issues"
+        inputs:
+          tools: "checkov"
+          categories: "IaC"
+          break: false
 
-  - task: AzureCLI@2
-    displayName: "Preview infrastructure changes before deploying"
-    inputs:
-      azureSubscription: "goat-ticket-connection"
-      scriptType: "bash"
-      scriptLocation: "inlineScript"
-      inlineScript: |
-        az deployment sub what-if \
-          --location southeastasia \
-          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
-          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam" \
-          --result-format FullResourcePayloads > whatif-output.txt
-        cat whatif-output.txt
-        if grep -q "Delete" whatif-output.txt; then
-          echo "##vso[task.logissue type=warning]What-If detected resource DELETIONS — review carefully."
-        fi
-    env:
-      TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-      KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+      #WHAT-IF
+      - task: BicepDeploy@0
+        displayName: "Preview infrastructure changes"
+        inputs:
+          type: deployment
+          operation: whatIf
+          scope: subscription
+          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
+          subscriptionId: ${{ parameters.subscriptionId }}
+          location: ${{ parameters.location }}
+          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+        env:
+          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+          
 
-  - task: AzureCLI@2
-    displayName: "Deploy infrastructure to the ${{ parameters.environment }} environment"
-    inputs:
-      azureSubscription: "goat-ticket-connection"
-      scriptType: "bash"
-      scriptLocation: "inlineScript"
-      inlineScript: |
-        az deployment sub create \
-          --location southeastasia \
-          --template-file "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep" \
-          --parameters "$(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.environment }}.bicepparam"
-    env:
-      TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-      KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+
+  # ===== Job 2: GATE Yes/No =====
+  - job: InfraGate_${{ parameters.environment }}
+    displayName: "Decide whether to deploy infrastructure to ${{ parameters.environment }}"
+    dependsOn: InfraChecks_${{ parameters.environment }}
+    pool: server
+    steps:
+      - task: ManualValidation@0
+        displayName: "Apply infrastructure changes to ${{ parameters.environment }}?"
+        timeoutInMinutes: 1440
+        continueOnError: true
+        inputs:
+          instructions: "Review the preview result in the log of job Infra checks. Resume to deploy infrastructure, Reject to skip it."
+          onTimeout: reject
+
+
+
+  # ===== Job 3: DEPLOY =====
+  - job: InfraDeploy_${{ parameters.environment }}
+    displayName: "Deploy infrastructure to ${{ parameters.environment }}"
+    dependsOn:
+      - InfraChecks_${{ parameters.environment }}
+      - InfraGate_${{ parameters.environment }}
+    condition: and(succeeded('InfraChecks_${{ parameters.environment }}'), eq(dependencies.InfraGate_${{ parameters.environment }}.result, 'Succeeded'))
+    steps:
+      - task: BicepDeploy@0
+        displayName: "Deploy infrastructure to ${{ parameters.environment }}"
+        inputs:
+          type: deployment
+          operation: create
+          scope: subscription
+          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
+          subscriptionId: ${{ parameters.subscriptionId }}
+          location: ${{ parameters.location }}
+          name: infra-${{ parameters.environment }}
+          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+        env:
+          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

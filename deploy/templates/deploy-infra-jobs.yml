@@ -1,11 +1,8 @@
 parameters:
   - name: environment # dev, sit, uat, preprod, prod
     type: string
-  - name: target
+  - name: target # bicepparam file name; mock: dev
     type: string
-  - name: dependsOn
-    type: object
-    default: []
   - name: azureSubscription
     type: string
     default: goat-ticket-connection
@@ -17,14 +14,13 @@ parameters:
     default: southeastasia
 
 jobs:
-  # ===== Job 1: INFRA CHECK =====
+  # Checks only read and preview, so a plain job is enough
   - job: InfraChecks_${{ parameters.environment }}
     displayName: "Check infrastructure changes for ${{ parameters.environment }}"
-    dependsOn: ${{ parameters.dependsOn }}
     steps:
       - checkout: InfraRepo
         fetchDepth: 1
-      #VALIDATE
+
       - task: BicepDeploy@0
         displayName: "Validate infrastructure changes against Azure"
         inputs:
@@ -40,15 +36,13 @@ jobs:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-      #SECURITY
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:
-          tools: "checkov"
+          tools: "checkov,templateanalyzer"
           categories: "IaC"
           break: false
 
-      #WHAT-IF
       - task: BicepDeploy@0
         displayName: "Preview infrastructure changes"
         inputs:
@@ -64,42 +58,31 @@ jobs:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-  # ===== Job 2: GATE Yes/No =====
-  - job: InfraGate_${{ parameters.environment }}
-    displayName: "Decide whether to deploy infrastructure to ${{ parameters.environment }}"
-    dependsOn: InfraChecks_${{ parameters.environment }}
-    pool: server
-    steps:
-      - task: ManualValidation@0
-        displayName: "Apply infrastructure changes to ${{ parameters.environment }}?"
-        timeoutInMinutes: 1440
-        continueOnError: true
-        inputs:
-          instructions: "Review the preview result in the log of job Infra checks. Resume to deploy infrastructure, Reject to skip it."
-          onTimeout: reject
-
-  # ===== Job 3: DEPLOY =====
-  - job: InfraDeploy_${{ parameters.environment }}
+  # Deploying changes real infrastructure, so it is a deployment job bound to the Environment
+  - deployment: InfraDeploy_${{ parameters.environment }}
     displayName: "Deploy infrastructure to ${{ parameters.environment }}"
-    dependsOn:
-      - InfraChecks_${{ parameters.environment }}
-      - InfraGate_${{ parameters.environment }}
-    condition: and(succeeded('InfraChecks_${{ parameters.environment }}'), eq(dependencies.InfraGate_${{ parameters.environment }}.result, 'Succeeded'))
-    steps:
-      - checkout: InfraRepo
-        fetchDepth: 1
-      - task: BicepDeploy@0
-        displayName: "Deploy infrastructure to ${{ parameters.environment }}"
-        inputs:
-          type: deployment
-          operation: create
-          scope: subscription
-          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
-          subscriptionId: ${{ parameters.subscriptionId }}
-          location: ${{ parameters.location }}
-          name: infra-${{ parameters.environment }}
-          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
-        env:
-          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+    dependsOn: InfraChecks_${{ parameters.environment }}
+    environment: goat-${{ parameters.environment }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            # Deployment jobs do not check out any repository by default
+            - checkout: InfraRepo
+              fetchDepth: 1
+
+            - task: BicepDeploy@0
+              displayName: "Deploy infrastructure to ${{ parameters.environment }}"
+              inputs:
+                type: deployment
+                operation: create
+                scope: subscription
+                azureResourceManagerConnection: ${{ parameters.azureSubscription }}
+                subscriptionId: ${{ parameters.subscriptionId }}
+                location: ${{ parameters.location }}
+                name: infra-${{ parameters.environment }}
+                templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
+              env:
+                TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
+                KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

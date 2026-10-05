@@ -34,8 +34,8 @@ jobs:
           azureResourceManagerConnection: ${{ parameters.azureSubscription }}
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
-          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
@@ -58,8 +58,8 @@ jobs:
           azureResourceManagerConnection: ${{ parameters.azureSubscription }}
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
-          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
@@ -98,8 +98,8 @@ jobs:
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
           name: infra-${{ parameters.environment }}
-          templateFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/goat-ticket-infra/deploy/variables/${{ parameters.target }}.bicepparam
+          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

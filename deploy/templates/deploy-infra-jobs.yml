@@ -22,6 +22,8 @@ jobs:
     displayName: "Check infrastructure changes for ${{ parameters.environment }}"
     dependsOn: ${{ parameters.dependsOn }}
     steps:
+      - checkout: InfraRepo
+        fetchDepth: 1
       #VALIDATE
       - task: BicepDeploy@0
         displayName: "Validate infrastructure changes against Azure"
@@ -84,6 +86,8 @@ jobs:
       - InfraGate_${{ parameters.environment }}
     condition: and(succeeded('InfraChecks_${{ parameters.environment }}'), eq(dependencies.InfraGate_${{ parameters.environment }}.result, 'Succeeded'))
     steps:
+      - checkout: InfraRepo
+        fetchDepth: 1
       - task: BicepDeploy@0
         displayName: "Deploy infrastructure to ${{ parameters.environment }}"
         inputs:

@@ -1,14 +1,18 @@
 parameters:
   - name: environment # dev, sit, uat, preprod, prod
     type: string
+
   - name: target # bicepparam file name; mock: dev
     type: string
+
   - name: azureSubscription
     type: string
+
     default: goat-ticket-connection
   - name: subscriptionId
     type: string
     default: 919a17b8-76d4-471b-9c13-d1370b6e1da2
+    
   - name: location
     type: string
     default: southeastasia

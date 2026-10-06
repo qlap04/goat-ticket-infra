@@ -1,15 +1,12 @@
 parameters:
-  - name: environment
+  - name: environment          # logical environment: dev, sit, uat, preprod, prod
     type: string
 
-  - name: parameterFileByEnvironment
-    type: object
-    default:
-      dev: dev
-      sit: dev
-      uat: dev
-      preprod: dev
-      prod: dev
+  - name: adoEnvironment       # Azure DevOps Environment the deploy job binds to (approvals live there)
+    type: string
+
+  - name: deployJobName        # name of the final job; the caller depends on exactly this name
+    type: string
 
   - name: azureSubscription
     type: string
@@ -22,15 +19,34 @@ parameters:
   - name: location
     type: string
     default: southeastasia
+  # Infra-owned settings per environment: the only place where concrete names live.
+  # Mock: every environment still uses the dev parameter file and the dev secrets.
+  - name: settings
+    type: object
+    default:
+      dev:
+        parameterFile: dev
+        secretGroup: goat-ticket-secrets-dev
+      sit:
+        parameterFile: dev
+        secretGroup: goat-ticket-secrets-dev
+      uat:
+        parameterFile: dev
+        secretGroup: goat-ticket-secrets-dev
+      preprod:
+        parameterFile: dev
+        secretGroup: goat-ticket-secrets-dev
+      prod:
+        parameterFile: dev
+        secretGroup: goat-ticket-secrets-dev
 
 jobs:
-
-  - job: InfraChecks_${{ parameters.environment }}
+  # Checks only read and preview, so a plain job is enough
+  - job: ${{ parameters.deployJobName }}_Checks
     displayName: "Check infrastructure changes for ${{ parameters.environment }}"
     variables:
-      - group: goat-ticket-secrets-${{ parameters.parameterFileByEnvironment[parameters.environment] }}
-      - name: parameterFile
-        value: ${{ parameters.parameterFileByEnvironment[parameters.environment] }}
+      # Infra secrets are scoped to the infra jobs only
+      - group: ${{ parameters.settings[parameters.environment].secretGroup }}
     steps:
       - checkout: InfraRepo
         fetchDepth: 1
@@ -45,7 +61,7 @@ jobs:
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
@@ -53,7 +69,7 @@ jobs:
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:
-          tools: "checkov"
+          tools: "checkov,templateanalyzer"
           categories: "IaC"
           break: false
 
@@ -67,24 +83,23 @@ jobs:
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-
-  - deployment: InfraDeploy_${{ parameters.environment }}
+  
+  - deployment: ${{ parameters.deployJobName }}
     displayName: "Deploy infrastructure to ${{ parameters.environment }}"
-    dependsOn: InfraChecks_${{ parameters.environment }}
-    environment: goat-${{ parameters.environment }}
+    dependsOn: ${{ parameters.deployJobName }}_Checks
+    environment: ${{ parameters.adoEnvironment }}
     variables:
-      - group: goat-ticket-secrets-${{ parameters.parameterFileByEnvironment[parameters.environment] }}
-      - name: parameterFile
-        value: ${{ parameters.parameterFileByEnvironment[parameters.environment] }}
+      - group: ${{ parameters.settings[parameters.environment].secretGroup }}
     strategy:
       runOnce:
         deploy:
           steps:
+            # Deployment jobs do not check out any repository by default
             - checkout: InfraRepo
               fetchDepth: 1
 
@@ -99,7 +114,7 @@ jobs:
                 location: ${{ parameters.location }}
                 name: infra-${{ parameters.environment }}
                 templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-                parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
               env:
                 TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
                 KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

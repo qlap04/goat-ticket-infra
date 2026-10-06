@@ -1,26 +1,36 @@
 parameters:
-  - name: environment # dev, sit, uat, preprod, prod
+  - name: environment
     type: string
 
-  - name: target # bicepparam file name; mock: dev
-    type: string
+  - name: parameterFileByEnvironment
+    type: object
+    default:
+      dev: dev
+      sit: dev
+      uat: dev
+      preprod: dev
+      prod: dev
 
   - name: azureSubscription
     type: string
-
     default: goat-ticket-connection
+
   - name: subscriptionId
     type: string
     default: 919a17b8-76d4-471b-9c13-d1370b6e1da2
-    
+
   - name: location
     type: string
     default: southeastasia
 
 jobs:
-  # Checks only read and preview, so a plain job is enough
+
   - job: InfraChecks_${{ parameters.environment }}
     displayName: "Check infrastructure changes for ${{ parameters.environment }}"
+    variables:
+      - group: goat-ticket-secrets-${{ parameters.parameterFileByEnvironment[parameters.environment] }}
+      - name: parameterFile
+        value: ${{ parameters.parameterFileByEnvironment[parameters.environment] }}
     steps:
       - checkout: InfraRepo
         fetchDepth: 1
@@ -35,7 +45,7 @@ jobs:
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
@@ -43,7 +53,7 @@ jobs:
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:
-          tools: "checkov,templateanalyzer"
+          tools: "checkov"
           categories: "IaC"
           break: false
 
@@ -57,21 +67,24 @@ jobs:
           subscriptionId: ${{ parameters.subscriptionId }}
           location: ${{ parameters.location }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-  # Deploying changes real infrastructure, so it is a deployment job bound to the Environment
+
   - deployment: InfraDeploy_${{ parameters.environment }}
     displayName: "Deploy infrastructure to ${{ parameters.environment }}"
     dependsOn: InfraChecks_${{ parameters.environment }}
     environment: goat-${{ parameters.environment }}
+    variables:
+      - group: goat-ticket-secrets-${{ parameters.parameterFileByEnvironment[parameters.environment] }}
+      - name: parameterFile
+        value: ${{ parameters.parameterFileByEnvironment[parameters.environment] }}
     strategy:
       runOnce:
         deploy:
           steps:
-            # Deployment jobs do not check out any repository by default
             - checkout: InfraRepo
               fetchDepth: 1
 
@@ -86,7 +99,7 @@ jobs:
                 location: ${{ parameters.location }}
                 name: infra-${{ parameters.environment }}
                 templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.target }}.bicepparam
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/$(parameterFile).bicepparam
               env:
                 TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
                 KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

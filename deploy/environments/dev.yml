@@ -1,0 +1,19 @@
+parameters:
+  - name: deployJobName
+    type: string
+  - name: repository
+    type: string
+
+jobs:
+  - template: ../templates/deploy-infra-jobs.yml
+    parameters:
+      environment: dev
+      deployJobName: ${{ parameters.deployJobName }}
+      repository: ${{ parameters.repository }}
+      azureServiceConnection: goat-ticket-connection
+      azureSubscriptionId: 919a17b8-76d4-471b-9c13-d1370b6e1da2
+      azureLocation: southeastasia
+      deploymentName: infra-dev
+      environmentName: goat-dev
+      parameterFile: dev
+      secretGroup: goat-ticket-secrets-dev

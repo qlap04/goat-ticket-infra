@@ -1,0 +1,24 @@
+# Infrastructure values for the uat environment.
+# MOCK: every environment currently uses the dev parameter file, subscription and secrets.
+# When a real environment exists, change only the values below. The template is not touched.
+
+parameters:
+  # Chosen by the caller (the infrastructure pipeline or the application pipeline).
+  - name: deployJobName
+    type: string
+  - name: repository
+    type: string
+
+jobs:
+  - template: ../templates/deploy-infra-jobs.yml
+    parameters:
+      environment: uat
+      deployJobName: ${{ parameters.deployJobName }}
+      repository: ${{ parameters.repository }}
+      azureServiceConnection: goat-ticket-connection
+      azureSubscriptionId: 919a17b8-76d4-471b-9c13-d1370b6e1da2
+      azureLocation: southeastasia
+      deploymentName: infra-uat
+      environmentName: goat-uat
+      parameterFile: dev
+      secretGroup: goat-ticket-secrets-dev

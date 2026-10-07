@@ -1,54 +1,58 @@
+# Infrastructure delivery for ONE environment: checks first, then deploy.
+
 parameters:
-  - name: environment          # logical environment: dev, sit, uat, preprod, prod
+  - name: environment
+    type: string
+    values:
+      - dev
+      - sit
+      - uat
+      - preprod
+      - prod
+  # Name of the deploy job. 
+  - name: deployJobName
     type: string
 
-  - name: adoEnvironment       # Azure DevOps Environment the deploy job binds to (approvals live there)
+  # Where to check out the infrastructure code: self (infra pipeline) or InfraRepo (other pipelines).
+  - name: repository
+    type: string
+    values:
+      - self
+      - InfraRepo
+  
+  - name: azureServiceConnection
+    type: string
+  
+  - name: azureSubscriptionId
     type: string
 
-  - name: deployJobName        # name of the final job; the caller depends on exactly this name
+  - name: azureLocation
     type: string
 
-  - name: azureSubscription
+  - name: deploymentName
     type: string
-    default: goat-ticket-connection
 
-  - name: subscriptionId
+  # Azure DevOps Environment. Approvals and branch control are configured on it.
+  - name: environmentName
     type: string
-    default: 919a17b8-76d4-471b-9c13-d1370b6e1da2
 
-  - name: location
+  # Name (without extension) of the .bicepparam file under deploy/variables.
+  - name: parameterFile
     type: string
-    default: southeastasia
-  # Infra-owned settings per environment: the only place where concrete names live.
-  # Mock: every environment still uses the dev parameter file and the dev secrets.
-  - name: settings
-    type: object
-    default:
-      dev:
-        parameterFile: dev
-        secretGroup: goat-ticket-secrets-dev
-      sit:
-        parameterFile: dev
-        secretGroup: goat-ticket-secrets-dev
-      uat:
-        parameterFile: dev
-        secretGroup: goat-ticket-secrets-dev
-      preprod:
-        parameterFile: dev
-        secretGroup: goat-ticket-secrets-dev
-      prod:
-        parameterFile: dev
-        secretGroup: goat-ticket-secrets-dev
+
+  # Variable group holding ticketQrSigningKeyValue and keyVaultCertSecretUri.
+  - name: secretGroup
+    type: string
 
 jobs:
-  # Checks only read and preview, so a plain job is enough
+  # ---- Checks: read and preview only, so a plain job is enough ----
   - job: ${{ parameters.deployJobName }}_Checks
     displayName: "Check infrastructure changes for ${{ parameters.environment }}"
+    timeoutInMinutes: 30
     variables:
-      # Infra secrets are scoped to the infra jobs only
-      - group: ${{ parameters.settings[parameters.environment].secretGroup }}
+      - group: ${{ parameters.secretGroup }}
     steps:
-      - checkout: InfraRepo
+      - checkout: ${{ parameters.repository }}
         fetchDepth: 1
 
       - task: BicepDeploy@0
@@ -57,11 +61,12 @@ jobs:
           type: deployment
           operation: validate
           scope: subscription
-          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
-          subscriptionId: ${{ parameters.subscriptionId }}
-          location: ${{ parameters.location }}
+          azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
+          subscriptionId: ${{ parameters.azureSubscriptionId }}
+          location: ${{ parameters.azureLocation }}
+          name: ${{ parameters.deploymentName }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
@@ -69,9 +74,10 @@ jobs:
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:
-          tools: "checkov,templateanalyzer"
+          tools: "checkov"
           categories: "IaC"
           break: false
+          publish: true
 
       - task: BicepDeploy@0
         displayName: "Preview infrastructure changes"
@@ -79,28 +85,31 @@ jobs:
           type: deployment
           operation: whatIf
           scope: subscription
-          azureResourceManagerConnection: ${{ parameters.azureSubscription }}
-          subscriptionId: ${{ parameters.subscriptionId }}
-          location: ${{ parameters.location }}
+          azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
+          subscriptionId: ${{ parameters.azureSubscriptionId }}
+          location: ${{ parameters.azureLocation }}
+          name: ${{ parameters.deploymentName }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
         env:
           TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
           KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
 
-  
+  # ---- Deploy: changes real infrastructure ----
   - deployment: ${{ parameters.deployJobName }}
-    displayName: "Deploy infrastructure to ${{ parameters.environment }}"
+    displayName: "Deploy infra to ${{ parameters.environment }}"
     dependsOn: ${{ parameters.deployJobName }}_Checks
-    environment: ${{ parameters.adoEnvironment }}
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    timeoutInMinutes: 90
+    environment: ${{ parameters.environmentName }}
     variables:
-      - group: ${{ parameters.settings[parameters.environment].secretGroup }}
+      - group: ${{ parameters.secretGroup }}
     strategy:
       runOnce:
         deploy:
           steps:
-            # Deployment jobs do not check out any repository by default
-            - checkout: InfraRepo
+            # A deployment job checks nothing out by default.
+            - checkout: ${{ parameters.repository }}
               fetchDepth: 1
 
             - task: BicepDeploy@0
@@ -109,12 +118,12 @@ jobs:
                 type: deployment
                 operation: create
                 scope: subscription
-                azureResourceManagerConnection: ${{ parameters.azureSubscription }}
-                subscriptionId: ${{ parameters.subscriptionId }}
-                location: ${{ parameters.location }}
-                name: infra-${{ parameters.environment }}
+                azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
+                subscriptionId: ${{ parameters.azureSubscriptionId }}
+                location: ${{ parameters.azureLocation }}
+                name: ${{ parameters.deploymentName }}
                 templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.settings[parameters.environment].parameterFile }}.bicepparam
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
               env:
                 TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
                 KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)

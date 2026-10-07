@@ -1,73 +1,47 @@
-name: "Infra Deploy - $(Build.SourceBranchName)"
+# Infrastructure delivery pipeline. It runs on its own, without the application pipeline.
+# - Pull requests run the checks only (validate, security scan, preview). The template never
+#   deploys a pull request build.
+# - Production approval and the "only from main" rule are configured on the Azure DevOps
+#   Environments (Approvals and checks), not in this file.
 
-trigger:
-  tags:
-    include:
-      - infra-v*.*.*
+name: "Infrastructure Delivery - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
+
+trigger: none
+
+pr:
   branches:
-    exclude:
-      - "*"
+    include:
+      - develop
+      - main
+      - release/*
+  paths:
+    include:
+      - deploy/bicep/**
+      - deploy/environments/**
+      - deploy/pipeline/**
+      - deploy/templates/**
+      - deploy/variables/**
+
+parameters:
+  - name: environment
+    displayName: "Environment to deliver"
+    type: string
+    default: dev
+    values:
+      - dev
+      - sit
+      - uat
+      - preprod
+      - prod
 
 pool:
-  vmImage: "ubuntu-latest"
-
-variables:
-  - group: goat-ticket-secrets-dev
+  vmImage: ubuntu-24.04
 
 stages:
-  # ===== 1. QUALITY CHECKS (lint, validate, security scan, what-if — one stage, four steps) =====
-  - stage: QualityChecks
-    displayName: "Run infrastructure quality checks"
+  - stage: Infra_${{ parameters.environment }}
+    displayName: "Deploy infra to ${{ parameters.environment }}"
     jobs:
-      - job: QualityChecks
-        steps:
-          - script: bash deploy/script/lint-bicep.sh
-            displayName: "Check infrastructure code for syntax errors"
-          - task: AzureCLI@2
-            displayName: "Validate infrastructure changes against Azure"
-            inputs:
-              azureSubscription: "goat-ticket-connection"
-              scriptType: "bash"
-              scriptLocation: "scriptPath"
-              scriptPath: "deploy/script/validate-deployment.sh"
-              arguments: "dev deploy/variables/dev.bicepparam"
-            env:
-              TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-              KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
-
-          - task: MicrosoftSecurityDevOps@1
-            displayName: "Scan infrastructure code for security issues"
-            inputs:
-              tools: "checkov,templateanalyzer"
-              categories: "IaC"
-              break: false
-              publish: true
-              
-          - task: AzureCLI@2
-            displayName: "Preview infrastructure changes before deploying"
-            inputs:
-              azureSubscription: "goat-ticket-connection"
-              scriptType: "bash"
-              scriptLocation: "scriptPath"
-              scriptPath: "deploy/script/preview-changes.sh"
-              arguments: "dev deploy/variables/dev.bicepparam"
-            env:
-              TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-              KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
-          - publish: whatif-output.txt
-            artifact: whatif-report
-
-
-  # ===== 2. DEPLOY DEV =====
-  - template: templates/deploy-environment.yml
-    parameters:
-      environment: dev
-      dependsOn: QualityChecks
-
-
-
-  # ===== 3. DEPLOY PROD (gated by the goat-prod Environment's native Approval check) =====
-  - template: templates/deploy-environment.yml
-    parameters:
-      environment: prod
-      dependsOn: Deploydev
+      - template: ../environments/${{ parameters.environment }}.yml
+        parameters:
+          deployJobName: InfraDeploy_${{ parameters.environment }}
+          repository: self

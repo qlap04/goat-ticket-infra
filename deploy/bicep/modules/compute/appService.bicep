@@ -16,17 +16,26 @@ param appSubnetId string
 @secure()
 param appInsightsConnectionString string
 
-@description('Entra ID tenant ID')
-param tenantId string
+@description('Suffix appended to the globally unique app name, normally empty')
+param nameSuffix string
 
-@description('Client ID of the API app registration')
-param apiClientId string
-
-@description('Client ID of the Swagger UI app registration')
-param swaggerClientId string
+import { appServiceName as buildAppServiceName } from '../shared/naming.bicep'
 
 var appServicePlanName = 'plan-goat-${environment}'
-var appServiceName = 'app-goat-api-${environment}'
+var appServiceName = buildAppServiceName(environment, nameSuffix)
+
+// Only the settings that make this a working App Service resource, the way linuxFxVersion does.
+// Every application setting (AzureAd, SwaggerOAuth, Cosmos, Sql, Storage, KeyVault,
+// ASPNETCORE_ENVIRONMENT, Swagger) is owned by the delivery pipeline and written from
+// appSettingsJson in the goat-app-<env> variable group, so they are not listed here.
+//
+// Consequence to respect: an infrastructure deployment replaces this list, which clears the
+// settings the pipeline wrote. Run the application pipeline after any infrastructure deployment.
+// The stage template already orders it that way inside a run.
+var apiAppSettings = [
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+  { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
+]
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: appServicePlanName
@@ -40,7 +49,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   }
 }
 
-// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev envirorg ewwgwgnment, adds cost without benefit at this scale
+// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
 // checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID (Microsoft.Identity.Web) handles all authentication
 // checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once /api/health exists
 resource appService 'Microsoft.Web/sites@2024-11-01' = {
@@ -61,23 +70,12 @@ resource appService 'Microsoft.Web/sites@2024-11-01' = {
       minTlsVersion: '1.2'
       vnetRouteAllEnabled: true
       http20Enabled: true
-      appSettings: [
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
-        { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
-        { name: 'ASPNETCORE_ENVIRONMENT', value: 'Development' }
-        { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
-        { name: 'AzureAd__TenantId', value: tenantId }
-        { name: 'AzureAd__ClientId', value: apiClientId }
-        { name: 'AzureAd__Audience', value: 'api://${apiClientId}' }
-        { name: 'SwaggerOAuth__TenantId', value: tenantId }
-        { name: 'SwaggerOAuth__ClientId', value: swaggerClientId }
-        { name: 'SwaggerOAuth__Scope', value: 'api://${apiClientId}/access_as_user' }
-      ]
+      appSettings: apiAppSettings
     }
   }
 }
 
-// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev envirorg ewwgwgnment, adds cost without benefit at this scale
+// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
 // checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID (Microsoft.Identity.Web) handles all authentication
 // checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once /api/health exists
 resource appServiceStagingSlot 'Microsoft.Web/sites/slots@2024-11-01' = {
@@ -99,6 +97,9 @@ resource appServiceStagingSlot 'Microsoft.Web/sites/slots@2024-11-01' = {
       minTlsVersion: '1.2'
       vnetRouteAllEnabled: true
       http20Enabled: true
+      // Identical to the production list on purpose: settings that are not slot settings move with
+      // the code during a swap, so an entry missing here would be missing in production afterwards.
+      appSettings: apiAppSettings
     }
   }
 }
@@ -106,3 +107,4 @@ resource appServiceStagingSlot 'Microsoft.Web/sites/slots@2024-11-01' = {
 output appServiceId string = appService.id
 output appServicePrincipalId string = appService.identity.principalId
 output appServiceDefaultHostname string = appService.properties.defaultHostName
+output appServiceName string = appService.name

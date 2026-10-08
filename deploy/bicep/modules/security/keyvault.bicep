@@ -1,5 +1,6 @@
 // deploy/bicep/modules/security/keyvault.bicep
-// Key Vault (RBAC authorization) — TicketQrSigningKey secret only
+// Key Vault (RBAC authorization). The vault only; its secrets are written by the delivery
+// pipeline from a variable group, behind a toggle, so no secret value passes through Bicep.
 // public access disabled, private endpoint only
 
 @description('Environment for Key Vault')
@@ -9,13 +10,13 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
-@description('RS256 private key value for signing ticket QR codes')
-@secure()
-param ticketQrSigningKeyValue string
+@description('Suffix appended to the globally unique vault name, normally empty')
+param nameSuffix string
 
 import { networkAccessRules } from '../shared/networkAccessRules.bicep'
+import { keyVaultName as buildKeyVaultName } from '../shared/naming.bicep'
 
-var keyVaultName = 'kv-goat-${environment}'
+var keyVaultName = buildKeyVaultName(environment, nameSuffix)
 
 resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
   name: keyVaultName
@@ -33,14 +34,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
       defaultAction: networkAccessRules.defaultAction
       bypass: networkAccessRules.bypass
     }
-  }
-}
-
-resource ticketQrSigningKeySecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
-  parent: keyVault
-  name: 'TicketQrSigningKey'
-  properties: {
-    value: ticketQrSigningKeyValue
   }
 }
 

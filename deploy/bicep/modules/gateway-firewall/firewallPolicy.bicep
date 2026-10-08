@@ -58,7 +58,12 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
               '10.10.2.0/24'
               '10.10.3.0/24'
             ]
+            // An outbound FQDN allow-list names real hosts. environment() cannot supply these:
+            // it exposes the sign-in endpoint only as a URL with scheme and trailing slash, and its
+            // graph property is the retired Azure AD Graph, not Microsoft Graph. Stripping a URL
+            // apart to feed one of the two entries would add noise without making the list portable.
             targetFqdns: [
+              #disable-next-line no-hardcoded-env-urls
               'login.microsoftonline.com'
               'graph.microsoft.com'
             ]

@@ -81,7 +81,11 @@ resource seatHoldQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2
 
 output runtimeStorageAccountId string = runtimeStorageAccount.id
 output runtimeStorageAccountName string = runtimeStorageAccount.name
+output runtimeStorageAccountBlobEndpoint string = runtimeStorageAccount.properties.primaryEndpoints.blob
 output businessStorageAccountId string = businessStorageAccount.id
 output businessStorageAccountName string = businessStorageAccount.name
 output businessStorageAccountBlobEndpoint string = businessStorageAccount.properties.primaryEndpoints.blob
 output businessStorageAccountQueueEndpoint string = businessStorageAccount.properties.primaryEndpoints.queue
+output ticketsContainerName string = ticketsContainer.name
+output orderCreatedQueueName string = orderCreatedQueue.name
+output seatHoldQueueName string = seatHoldQueue.name

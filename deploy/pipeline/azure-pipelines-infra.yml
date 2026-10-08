@@ -1,9 +1,3 @@
-# Infrastructure delivery pipeline. It runs on its own, without the application pipeline.
-# - Pull requests run the checks only (validate, security scan, preview). The template never
-#   deploys a pull request build.
-# - Production approval and the "only from main" rule are configured on the Azure DevOps
-#   Environments (Approvals and checks), not in this file.
-
 name: "Infrastructure Delivery - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
 
 trigger: none
@@ -17,31 +11,48 @@ pr:
   paths:
     include:
       - deploy/bicep/**
-      - deploy/environments/**
       - deploy/pipeline/**
       - deploy/templates/**
       - deploy/variables/**
 
 parameters:
-  - name: environment
-    displayName: "Environment to deliver"
+  - name: azureLocation
+    displayName: "Deployment metadata location (must match the .bicepparam)"
     type: string
-    default: dev
-    values:
-      - dev
-      - sit
-      - uat
-      - preprod
-      - prod
+    default: southeastasia
+
+  - name: environments
+    displayName: "Environments to deliver, in order"
+    type: object
+    default:
+      - environment: dev
+        environmentName: goat-dev
 
 pool:
   vmImage: ubuntu-24.04
 
 stages:
-  - stage: Infra_${{ parameters.environment }}
-    displayName: "Deploy infra to ${{ parameters.environment }}"
-    jobs:
-      - template: ../environments/${{ parameters.environment }}.yml
-        parameters:
-          deployJobName: InfraDeploy_${{ parameters.environment }}
-          repository: self
+  - ${{ each env in parameters.environments }}:
+      - stage: Infra_${{ env.environment }}
+        displayName: "Deliver infrastructure to ${{ upper(env.environment) }}"
+        jobs:
+          - template: ../templates/deploy-infra-jobs.yml
+            parameters:
+              environment: ${{ env.environment }}
+              environmentName: ${{ env.environmentName }}
+              deployJobName: InfraDeploy_${{ env.environment }}
+              repository: self
+
+              azureServiceConnection: goat-ticket-connection
+              azureSubscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
+              azureLocation: ${{ parameters.azureLocation }}
+              bicepVersion: 0.47.16
+
+              stackName: stack-goat-dev
+
+              actionOnUnmanageResources: detach
+              actionOnUnmanageResourceGroups: detach
+
+              denySettingsMode: none
+
+              bypassStackOutOfSyncError: false

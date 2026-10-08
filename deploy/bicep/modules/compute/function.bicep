@@ -16,15 +16,17 @@ param funcSubnetId string
 @description('Storage Account name for AzureWebJobsStorage (Function runtime internal storage)')
 param runtimeStorageAccountName string
 
-@description('Business Storage Account name — for blob (tickets) and queue (order-created, seat-hold-queue). Accessed via DefaultAzureCredential, not a connection string.')
-param businessStorageAccountName string
-
 @description('Application Insights connection string')
 @secure()
 param appInsightsConnectionString string
 
+@description('Suffix appended to the globally unique function app name, normally empty')
+param nameSuffix string
+
+import { functionAppName as buildFunctionAppName } from '../shared/naming.bicep'
+
 var functionPlanName = 'plan-goat-func-${environment}'
-var functionAppName = 'func-goat-worker-${environment}'
+var functionAppName = buildFunctionAppName(environment, nameSuffix)
 
 resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: functionPlanName
@@ -60,6 +62,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       minTlsVersion: '1.2'
       vnetRouteAllEnabled: true
       http20Enabled: true
+      // Only what the Functions host needs to run. Application settings come from the pipeline.
       appSettings: [
         {
           name: 'AzureWebJobsStorage__accountName'
@@ -81,38 +84,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsightsConnectionString
         }
-        {
-          name: 'BusinessStorageAccountName'
-          value: businessStorageAccountName
-        }
       ]
-    }
-  }
-}
-
-// checkov:skip=CKV_AZURE_225:Zone redundancy not needed for portfolio dev environment, adds cost without benefit at this scale
-// checkov:skip=CKV_AZURE_17:Client certificate auth not used, Entra ID handles authentication for the API; Function has no public inbound
-// checkov:skip=CKV_AZURE_213:Health check endpoint not yet implemented in application code — enable once a health check function exists
-resource functionAppStagingSlot 'Microsoft.Web/sites/slots@2024-11-01' = {
-  parent: functionApp
-  name: 'staging'
-  location: location
-  kind: 'functionapp,linux'
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    serverFarmId: functionPlan.id
-    virtualNetworkSubnetId: funcSubnetId
-    publicNetworkAccess: 'Disabled'
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
-      alwaysOn: true
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      vnetRouteAllEnabled: true
-      http20Enabled: true
     }
   }
 }
@@ -120,3 +92,4 @@ resource functionAppStagingSlot 'Microsoft.Web/sites/slots@2024-11-01' = {
 output functionAppId string = functionApp.id
 output functionAppPrincipalId string = functionApp.identity.principalId
 output functionAppDefaultHostname string = functionApp.properties.defaultHostName
+output functionAppName string = functionApp.name

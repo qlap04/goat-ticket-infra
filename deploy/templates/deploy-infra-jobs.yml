@@ -1,5 +1,3 @@
-# Infrastructure delivery for ONE environment: checks first, then deploy.
-
 parameters:
   - name: environment
     type: string
@@ -9,121 +7,136 @@ parameters:
       - uat
       - preprod
       - prod
-  # Name of the deploy job. 
+
   - name: deployJobName
     type: string
 
-  # Where to check out the infrastructure code: self (infra pipeline) or InfraRepo (other pipelines).
+  - name: environmentName
+    type: string
+
   - name: repository
     type: string
     values:
       - self
       - InfraRepo
-  
+
   - name: azureServiceConnection
     type: string
-  
+
   - name: azureSubscriptionId
     type: string
 
   - name: azureLocation
     type: string
 
-  - name: deploymentName
+  - name: bicepVersion
     type: string
 
-  # Azure DevOps Environment. Approvals and branch control are configured on it.
-  - name: environmentName
+  - name: stackName
     type: string
 
-  # Name (without extension) of the .bicepparam file under deploy/variables.
-  - name: parameterFile
+  - name: actionOnUnmanageResources
     type: string
+    values:
+      - detach
+      - delete
 
-  # Variable group holding ticketQrSigningKeyValue and keyVaultCertSecretUri.
-  - name: secretGroup
+  - name: actionOnUnmanageResourceGroups
     type: string
+    values:
+      - detach
+      - delete
+
+  - name: denySettingsMode
+    type: string
+    values:
+      - none
+      - denyDelete
+      - denyWriteAndDelete
+
+  - name: bypassStackOutOfSyncError
+    type: boolean
 
 jobs:
-  # ---- Checks: read and preview only, so a plain job is enough ----
   - job: ${{ parameters.deployJobName }}_Checks
-    displayName: "Check infrastructure changes for ${{ parameters.environment }}"
+    displayName: "Check infrastructure changes for ${{ upper(parameters.environment) }}"
     timeoutInMinutes: 30
-    variables:
-      - group: ${{ parameters.secretGroup }}
     steps:
+
       - checkout: ${{ parameters.repository }}
         fetchDepth: 1
 
       - task: BicepDeploy@0
         displayName: "Validate infrastructure changes against Azure"
         inputs:
-          type: deployment
+          type: deploymentStack
           operation: validate
           scope: subscription
           azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
           subscriptionId: ${{ parameters.azureSubscriptionId }}
           location: ${{ parameters.azureLocation }}
-          name: ${{ parameters.deploymentName }}
+          bicepVersion: ${{ parameters.bicepVersion }}
+          name: ${{ parameters.stackName }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
-        env:
-          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+          actionOnUnmanageResources: ${{ parameters.actionOnUnmanageResources }}
+          actionOnUnmanageResourceGroups: ${{ parameters.actionOnUnmanageResourceGroups }}
+          denySettingsMode: ${{ parameters.denySettingsMode }}
+          bypassStackOutOfSyncError: ${{ parameters.bypassStackOutOfSyncError }}
 
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:
-          tools: "checkov"
-          categories: "IaC"
+          tools: checkov
+          categories: IaC
           break: false
           publish: true
 
       - task: BicepDeploy@0
         displayName: "Preview infrastructure changes"
         inputs:
-          type: deployment
+          type: deploymentStack
           operation: whatIf
           scope: subscription
           azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
           subscriptionId: ${{ parameters.azureSubscriptionId }}
           location: ${{ parameters.azureLocation }}
-          name: ${{ parameters.deploymentName }}
+          bicepVersion: ${{ parameters.bicepVersion }}
+          name: ${{ parameters.stackName }}
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
-        env:
-          TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-          KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+          actionOnUnmanageResources: ${{ parameters.actionOnUnmanageResources }}
+          actionOnUnmanageResourceGroups: ${{ parameters.actionOnUnmanageResourceGroups }}
+          denySettingsMode: ${{ parameters.denySettingsMode }}
+          bypassStackOutOfSyncError: ${{ parameters.bypassStackOutOfSyncError }}
 
-  # ---- Deploy: changes real infrastructure ----
   - deployment: ${{ parameters.deployJobName }}
-    displayName: "Deploy infra to ${{ parameters.environment }}"
+    displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"
     dependsOn: ${{ parameters.deployJobName }}_Checks
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     timeoutInMinutes: 90
     environment: ${{ parameters.environmentName }}
-    variables:
-      - group: ${{ parameters.secretGroup }}
     strategy:
       runOnce:
         deploy:
           steps:
-            # A deployment job checks nothing out by default.
             - checkout: ${{ parameters.repository }}
               fetchDepth: 1
 
             - task: BicepDeploy@0
-              displayName: "Deploy infrastructure to ${{ parameters.environment }}"
+              displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"
               inputs:
-                type: deployment
+                type: deploymentStack
                 operation: create
                 scope: subscription
                 azureResourceManagerConnection: ${{ parameters.azureServiceConnection }}
                 subscriptionId: ${{ parameters.azureSubscriptionId }}
                 location: ${{ parameters.azureLocation }}
-                name: ${{ parameters.deploymentName }}
+                bicepVersion: ${{ parameters.bicepVersion }}
+                name: ${{ parameters.stackName }}
                 templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.parameterFile }}.bicepparam
-              env:
-                TICKET_QR_SIGNING_KEY_VALUE: $(ticketQrSigningKeyValue)
-                KEY_VAULT_CERT_SECRET_URI: $(keyVaultCertSecretUri)
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+                actionOnUnmanageResources: ${{ parameters.actionOnUnmanageResources }}
+                actionOnUnmanageResourceGroups: ${{ parameters.actionOnUnmanageResourceGroups }}
+                denySettingsMode: ${{ parameters.denySettingsMode }}
+                bypassStackOutOfSyncError: ${{ parameters.bypassStackOutOfSyncError }}

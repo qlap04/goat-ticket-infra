@@ -9,10 +9,19 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
-import { networkAccessRules } from '../shared/networkAccessRules.bicep'
+@description('Suffix appended to the globally unique account name, normally empty')
+param nameSuffix string
 
-var cosmosAccountName = 'cosmos-goat-${environment}'
-var databaseName = 'goatticket'
+import { networkAccessRules } from '../shared/networkAccessRules.bicep'
+import { cosmosAccountName as buildCosmosAccountName } from '../shared/naming.bicep'
+
+var cosmosAccountName = buildCosmosAccountName(environment, nameSuffix)
+
+// Cosmos database and container ids are case sensitive and must match what the application asks
+// for: GoatTicket.Api reads them from Cosmos:DatabaseId / Cosmos:ContainerId, whose defaults in
+// Program.cs are 'GoatTicket' and 'catalog'. Both are exported below so the App Service settings
+// are driven from here instead of being restated.
+var databaseName = 'GoatTicket'
 var containerName = 'catalog'
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
@@ -81,3 +90,6 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
 
 output cosmosAccountId string = cosmosAccount.id
 output cosmosAccountEndpoint string = cosmosAccount.properties.documentEndpoint
+output cosmosAccountName string = cosmosAccount.name
+output cosmosDatabaseName string = databaseName
+output cosmosContainerName string = containerName

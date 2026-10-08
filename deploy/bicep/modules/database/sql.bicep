@@ -15,7 +15,12 @@ param sqlAdminObjectId string = deployer().objectId
 @description('Entra ID admin display name — defaults to the deployer objectId since Bicep deployer() has no userPrincipalName property, override with a real email/name if desired')
 param sqlAdminLogin string = deployer().objectId
 
-var sqlServerName = 'sql-goat-${environment}'
+@description('Suffix appended to the globally unique server name, normally empty')
+param nameSuffix string
+
+import { sqlServerName as buildSqlServerName } from '../shared/naming.bicep'
+
+var sqlServerName = buildSqlServerName(environment, nameSuffix)
 var sqlDatabaseName = 'sqldb-goat'
 
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
@@ -71,3 +76,5 @@ output sqlServerId string = sqlServer.id
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseId string = sqlDatabase.id
 output sqlServerPrincipalId string = sqlServer.identity.principalId
+output sqlServerName string = sqlServer.name
+output sqlDatabaseName string = sqlDatabase.name

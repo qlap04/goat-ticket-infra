@@ -30,12 +30,20 @@ param sqlServerPrincipalId string
 
 // ===== Built-in role definition IDs =====
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+var keyVaultSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var storageQueueDataContributorRoleId = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 var cosmosDataReaderRoleId = '00000000-0000-0000-0000-000000000001'
 
 var keyVaultPrincipals = [
+  {
+    // Whoever runs the deployment, which is the delivery pipeline's identity. It needs to write
+    // secrets because the pipeline, not Bicep, puts them in the vault.
+    principalId: deployer().objectId
+    roleDefinitionId: keyVaultSecretsOfficerRoleId
+    principalType: 'ServicePrincipal'
+  }
   {
     principalId: appServicePrincipalId
     roleDefinitionId: keyVaultSecretsUserRoleId

@@ -5,8 +5,8 @@
 @description('Name of the SQL Server (existing)')
 param sqlServerName string
 
-@description('Storage account name to write SQL audit logs to')
-param runtimeStorageAccountName string
+@description('Blob service endpoint of the storage account that holds SQL audit logs. Taken from the storage account itself rather than assembled from its name, so the endpoint stays correct in every cloud and cannot drift from the account.')
+param runtimeStorageAccountBlobEndpoint string
 
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' existing = {
   name: sqlServerName
@@ -17,7 +17,7 @@ resource sqlServerAuditing 'Microsoft.Sql/servers/auditingSettings@2025-01-01' =
   name: 'default'
   properties: {
     state: 'Enabled'
-    storageEndpoint: 'https://${runtimeStorageAccountName}.blob.core.windows.net'
+    storageEndpoint: runtimeStorageAccountBlobEndpoint
     isStorageSecondaryKeyInUse: false
     isAzureMonitorTargetEnabled: true
   }

@@ -8,6 +8,10 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
+@description('WAF rule enforcement: Detection logs a match, Prevention blocks the request.')
+@allowed(['Detection', 'Prevention'])
+param wafMode string
+
 var publicIpName = 'pip-agw-${environment}'
 var wafPolicyName = 'wafp-goat-${environment}'
 var agwIdentityName = 'id-agw-${environment}'
@@ -23,8 +27,11 @@ resource wafPolicy 'Microsoft.Network/applicationGatewayWebApplicationFirewallPo
   name: wafPolicyName
   location: location
   properties: {
+    // Dev runs Detection: the OWASP 3.2 managed rules match the OAuth redirect URL that Swagger
+    // login produces, and in Prevention mode that blocks the sign-in. Prevention becomes
+    // appropriate once per-rule exclusions for that redirect exist.
     policySettings: {
-      mode: 'Prevention'
+      mode: wafMode
       state: 'Enabled'
     }
     managedRules: {

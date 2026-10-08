@@ -22,22 +22,25 @@
 
 targetScope = 'subscription'
 
-@description('Environment name: dev or prod.')
+@description('Environment name: dev or prod. The mock deploys every pipeline stage to the dev resources, so the sit, uat and preprod parameter files also set dev here.')
 @allowed(['dev', 'prod'])
 param environment string
 
 @description('Azure region for all resources.')
-param location string = 'southeastasia'
+param location string
 
 @description('Custom domain for the App Gateway multi-site listener')
-param customDomain string = 'goatticket.com'
+param customDomain string
+
+@description('Suffix appended to the five resource names that live in a global DNS namespace. Normally empty; set it to move the whole set to a free name when another subscription holds the current one.')
+param nameSuffix string
 
 @description('URI of the TLS certificate secret in Key Vault, without version, for auto-rotation')
 param keyVaultCertSecretUri string
 
-@description('RS256 private key value for signing ticket QR codes')
-@secure()
-param ticketQrSigningKeyValue string
+@description('WAF rule enforcement. Detection logs matches without blocking; Prevention blocks them. Dev runs Detection because the OWASP 3.2 rule set matches the OAuth redirect URL that Swagger login uses.')
+@allowed(['Detection', 'Prevention'])
+param wafMode string
 
 // ===== RESOURCE GROUPS =====
 resource rgNetwork 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -151,6 +154,7 @@ module sqlModule 'modules/database/sql.bicep' = {
   params: {
     environment: environment
     location: location
+    nameSuffix: nameSuffix
     // sqlAdminObjectId / sqlAdminLogin intentionally NOT passed —
     // sql.bicep defaults them to deployer().objectId / deployer().userPrincipalName,
     // so whoever (or whichever pipeline Service Principal) runs the deployment
@@ -164,6 +168,7 @@ module cosmosModule 'modules/database/cosmos.bicep' = {
   params: {
     environment: environment
     location: location
+    nameSuffix: nameSuffix
   }
 }
 
@@ -176,7 +181,7 @@ module keyVaultModule 'modules/security/keyvault.bicep' = {
   params: {
     environment: environment
     location: location
-    ticketQrSigningKeyValue: ticketQrSigningKeyValue
+    nameSuffix: nameSuffix
   }
 }
 
@@ -191,9 +196,7 @@ module appServiceModule 'modules/compute/appService.bicep' = {
     location: location
     appSubnetId: vnetModule.outputs.snetAppResourceId
     appInsightsConnectionString: appInsightsModule.outputs.appInsightsConnectionString
-    tenantId: subscription().tenantId
-    apiClientId: '8cfb29cb-926b-4a7c-8cf4-ed1fe6d3cf0c'
-    swaggerClientId: '42dbeb33-c1a4-47a2-a135-cef955ede2d0'
+    nameSuffix: nameSuffix
   }
 }
 
@@ -205,8 +208,8 @@ module functionModule 'modules/compute/function.bicep' = {
     location: location
     funcSubnetId: vnetModule.outputs.snetFuncResourceId
     runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
-    businessStorageAccountName: storageModule.outputs.businessStorageAccountName
     appInsightsConnectionString: appInsightsModule.outputs.appInsightsConnectionString
+    nameSuffix: nameSuffix
   }
 }
 
@@ -219,6 +222,7 @@ module appGatewayModule 'modules/gateway-firewall/appGateway.bicep' = {
   params: {
     environment: environment
     location: location
+    wafMode: wafMode
   }
 }
 
@@ -262,8 +266,10 @@ module sqlAuditingModule 'modules/database/sqlAuditing.bicep' = {
   name: 'sqlAuditingDeployment'
   scope: rgApp
   params: {
-    sqlServerName: 'sql-goat-${environment}'
-    runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
+    // Taken from the module output, never rebuilt from the convention: a locally rebuilt name
+    // silently stops matching as soon as nameSuffix is not empty.
+    sqlServerName: sqlModule.outputs.sqlServerName
+    runtimeStorageAccountBlobEndpoint: storageModule.outputs.runtimeStorageAccountBlobEndpoint
   }
   dependsOn: [
     rbacModule
@@ -320,10 +326,11 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
     routeTableAppId: routeTableModule.outputs.routeTableAppId
     routeTablePeId: routeTableModule.outputs.routeTablePeId
   }
+  // nsgModule and routeTableModule are not listed: this module consumes their outputs as
+  // parameters, which already orders them. The rest are listed to make this module the last thing
+  // the deployment does, since associating an NSG and a route table rewrites the subnets.
   dependsOn: [
     vnetModule
-    nsgModule
-    routeTableModule
     firewallPolicyModule
     firewallModule
     routeTableEgressModule
@@ -346,7 +353,14 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
 // ============================================================
 // OUTPUTS
 // ============================================================
+// Consumed by the delivery pipelines so that no resource name is restated in YAML: the naming
+// convention is declared once, in modules/shared/naming.bicep, and travels outward from here.
 output resourceGroupNetworkName string = rgNetwork.name
 output resourceGroupAppName string = rgApp.name
 output appGatewayPublicIp string = appGatewayResourceModule.outputs.appGatewayPublicIp
 output appServiceDefaultHostname string = appServiceModule.outputs.appServiceDefaultHostname
+output apiAppName string = appServiceModule.outputs.appServiceName
+output functionAppName string = functionModule.outputs.functionAppName
+output keyVaultName string = keyVaultModule.outputs.keyVaultName
+output sqlServerName string = sqlModule.outputs.sqlServerName
+output cosmosAccountName string = cosmosModule.outputs.cosmosAccountName

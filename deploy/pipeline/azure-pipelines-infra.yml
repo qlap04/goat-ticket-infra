@@ -12,15 +12,9 @@ pr:
     include:
       - deploy/bicep/**
       - deploy/pipeline/**
-      - deploy/templates/**
       - deploy/variables/**
 
 parameters:
-  - name: azureLocation
-    displayName: "Deployment metadata location (must match the .bicepparam)"
-    type: string
-    default: southeastasia
-
   - name: environments
     displayName: "Environments to deliver, in order"
     type: object
@@ -36,23 +30,8 @@ stages:
       - stage: Infra_${{ env.environment }}
         displayName: "Deliver infrastructure to ${{ upper(env.environment) }}"
         jobs:
-          - template: ../templates/deploy-infra-jobs.yml
+          - template: templates/deploy-infra-jobs.yml
             parameters:
               environment: ${{ env.environment }}
               environmentName: ${{ env.environmentName }}
-              deployJobName: InfraDeploy_${{ env.environment }}
               repository: self
-
-              azureServiceConnection: goat-ticket-connection
-              azureSubscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
-              azureLocation: ${{ parameters.azureLocation }}
-              bicepVersion: 0.47.16
-
-              stackName: stack-goat-dev
-
-              actionOnUnmanageResources: detach
-              actionOnUnmanageResourceGroups: detach
-
-              denySettingsMode: none
-
-              bypassStackOutOfSyncError: false

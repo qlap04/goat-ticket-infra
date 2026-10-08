@@ -6,35 +6,31 @@ Read `docs/PROJECT_CONTEXT.md` first: it says what is done, what is only designe
 ## Layout
 
 ```
-deploy/bicep/                        Bicep (main.bicep at subscription scope, modules under modules/)
-deploy/variables/<env>.bicepparam    Bicep parameter files (mock: every environment uses dev)
-deploy/templates/deploy-infra-jobs.yml   the ONLY infrastructure pipeline template
-deploy/environments/<env>.yml        values for one environment, passed to the template as parameters
-deploy/pipeline/azure-pipelines-infra.yml  independent pipeline (manual run, pick the environment)
+deploy/bicep/                                    Bicep (main.bicep at subscription scope, modules under modules/)
+deploy/variables/<env>.bicepparam                the only place a Bicep parameter is assigned
+deploy/pipeline/azure-pipelines-infra.yml        independent pipeline, manual run
+deploy/pipeline/templates/deploy-infra-jobs.yml  the ONLY infrastructure pipeline template
 ```
 
 ## Rules
 
-- The template holds no environment values and no parameter defaults. Every value is a required parameter and comes
-  from `deploy/environments/<env>.yml`. `environment` has an allow-list.
+- Only what varies between callers is a template parameter: `environment`, `environmentName`, `repository`. One
+  subscription, one service connection, one stack, so those are fixed in the template rather than passed through two
+  files. `environment` has an allow-list and selects `deploy/variables/<env>.bicepparam`.
+- `.bicepparam` is the only place a Bicep parameter is assigned. No secret passes through Bicep: the application
+  pipeline writes secrets to Key Vault behind a toggle.
 - Built-in tasks only (`BicepDeploy@0`, `MicrosoftSecurityDevOps@1`). No inline scripts for lint, validate, what-if or deploy.
 - Infrastructure is delivered as an Azure deployment stack (`type: deploymentStack`, subscription scope) with the Bicep CLI
   pinned (`bicepVersion`). Keep `denySettingsMode: none` while resources are repaired or deleted by hand.
 - Deploy jobs are `deployment` jobs bound to an Environment; the template never deploys a pull request build.
 - Display names: plain professional English, no icons. Comments in English.
 - Bicep: RBAC uses a parent module that composes child modules with `for` loops over principal arrays. Share constants
-  with `@export()`. Every App Service setting must live in the Bicep `appSettings` array (deploys overwrite the rest).
+  with `@export()`; the five globally unique names come from `modules/shared/naming.bicep`.
+- Bicep keeps only the settings that make a resource work. Application settings belong to the delivery pipeline, from
+  the `goat-app-<env>` variable group. An infrastructure deploy replaces them, so run the application pipeline after.
 - Never commit keys, `.pem`, `.pfx` or secrets. Generate certificates in a temporary directory outside the repo.
 - Do not purge or touch Key Vaults whose names start with `kv-inventory`; they belong to another project.
 - Azure Firewall costs about 20 USD per day: do not deploy or leave resources running unless asked.
-
-## Before you commit pipeline YAML
-
-Run the offline checker with both repositories side by side:
-
-```
-python3 tools/verify_pipelines.py ../goat-ticket-app .
-```
 
 A template change needs a new tag (`infra-templates-vX.Y.Z`) and a matching bump of `ref` in the app pipeline.
 

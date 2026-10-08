@@ -1,0 +1,101 @@
+parameters:
+  - name: environment
+    type: string
+    values:
+      - dev
+      - sit
+      - uat
+      - preprod
+      - prod
+
+  - name: environmentName
+    type: string
+
+  - name: repository
+    type: string
+    values:
+      - self
+      - InfraRepo
+
+jobs:
+  - job: InfraDeploy_${{ parameters.environment }}_Checks
+    displayName: "Check infrastructure changes for ${{ upper(parameters.environment) }}"
+    timeoutInMinutes: 30
+    steps:
+      - checkout: ${{ parameters.repository }}
+        fetchDepth: 1
+
+      - task: BicepDeploy@0
+        displayName: "Validate infrastructure changes against Azure"
+        inputs:
+          type: deploymentStack
+          operation: validate
+          scope: subscription
+          azureResourceManagerConnection: goat-ticket-connection
+          subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
+          location: southeastasia
+          bicepVersion: 0.47.16
+          name: stack-goat-dev
+          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+          actionOnUnmanageResources: detach
+          actionOnUnmanageResourceGroups: detach
+          denySettingsMode: none
+          bypassStackOutOfSyncError: false
+
+      - task: MicrosoftSecurityDevOps@1
+        displayName: "Scan infrastructure code for security issues"
+        inputs:
+          tools: checkov
+          categories: IaC
+          break: false
+          publish: true
+
+      - task: BicepDeploy@0
+        displayName: "Preview infrastructure changes"
+        inputs:
+          type: deploymentStack
+          operation: whatIf
+          scope: subscription
+          azureResourceManagerConnection: goat-ticket-connection
+          subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
+          location: southeastasia
+          bicepVersion: 0.47.16
+          name: stack-goat-dev
+          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+          actionOnUnmanageResources: detach
+          actionOnUnmanageResourceGroups: detach
+          denySettingsMode: none
+          bypassStackOutOfSyncError: false
+
+  - deployment: InfraDeploy_${{ parameters.environment }}
+    displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"
+    dependsOn: InfraDeploy_${{ parameters.environment }}_Checks
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    timeoutInMinutes: 90
+    environment: ${{ parameters.environmentName }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: ${{ parameters.repository }}
+              fetchDepth: 1
+
+            - task: BicepDeploy@0
+              displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"
+              inputs:
+                type: deploymentStack
+                operation: create
+                scope: subscription
+                azureResourceManagerConnection: goat-ticket-connection
+                subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
+                location: southeastasia
+                bicepVersion: 0.47.16
+                name: stack-goat-dev
+                templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
+                parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
+                actionOnUnmanageResources: detach
+                actionOnUnmanageResourceGroups: detach
+                denySettingsMode: none
+                bypassStackOutOfSyncError: false

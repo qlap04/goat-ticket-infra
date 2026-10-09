@@ -43,6 +43,12 @@ jobs:
           denySettingsMode: none
           bypassStackOutOfSyncError: false
 
+      - task: UseDotNet@2
+        displayName: "Install .NET 6 runtime for the security scanner"
+        inputs:
+          packageType: runtime
+          version: 6.x
+
       - task: MicrosoftSecurityDevOps@1
         displayName: "Scan infrastructure code for security issues"
         inputs:

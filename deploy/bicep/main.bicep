@@ -135,6 +135,19 @@ module storageModule 'modules/storage/storageAccount.bicep' = {
 }
 
 // ============================================================
+// 4b. APP CONFIGURATION — common keys unlabelled, per-environment keys labelled
+// ============================================================
+module appConfigurationModule 'modules/config/appConfiguration.bicep' = {
+  name: 'appConfigurationDeployment'
+  scope: rgApp
+  params: {
+    environment: environment
+    location: location
+    nameSuffix: nameSuffix
+  }
+}
+
+// ============================================================
 // 5. APPLICATION INSIGHTS (shared by App Service + Function)
 // ============================================================
 module appInsightsModule 'modules/security/appInsights.bicep' = {
@@ -239,6 +252,7 @@ module rbacModule 'modules/security/rbac/rbac.bicep' = {
     agwIdentityPrincipalId: appGatewayModule.outputs.agwIdentityPrincipalId
     sqlServerPrincipalId: sqlModule.outputs.sqlServerPrincipalId
     keyVaultId: keyVaultModule.outputs.keyVaultId
+    appConfigurationId: appConfigurationModule.outputs.appConfigurationId
     cosmosAccountId: cosmosModule.outputs.cosmosAccountId
     runtimeStorageAccountId: storageModule.outputs.runtimeStorageAccountId
     businessStorageAccountId: storageModule.outputs.businessStorageAccountId
@@ -365,3 +379,4 @@ output functionAppName string = functionModule.outputs.functionAppName
 output keyVaultName string = keyVaultModule.outputs.keyVaultName
 output sqlServerName string = sqlModule.outputs.sqlServerName
 output cosmosAccountName string = cosmosModule.outputs.cosmosAccountName
+output appConfigurationEndpoint string = appConfigurationModule.outputs.appConfigurationEndpoint

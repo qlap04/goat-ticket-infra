@@ -43,3 +43,9 @@ func runtimeStorageAccountName(environment string, nameSuffix string) string =>
 @export()
 func businessStorageAccountName(environment string, nameSuffix string) string =>
   toLower('stgbiz${environment}${nameSuffix}')
+
+// App Configuration store names live in the *.azconfig.io namespace, so they are globally unique
+// too. Between 5 and 50 characters, letters, digits and hyphens.
+@export()
+func appConfigurationName(environment string, nameSuffix string) string =>
+  'appcs-goat-${environment}${empty(nameSuffix) ? '' : '-${nameSuffix}'}'

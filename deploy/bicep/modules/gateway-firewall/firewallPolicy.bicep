@@ -79,6 +79,9 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
               '10.10.3.0/24'
             ]
             targetFqdns: [
+              // The applications route all outbound traffic through this firewall, so the App
+              // Configuration endpoint has to be allowed or their startup read is denied.
+              '*.azconfig.io'
               '*.applicationinsights.azure.com'
               '*.monitor.azure.com'
             ]

@@ -16,6 +16,9 @@ param agwIdentityPrincipalId string
 @description('Resource ID of the Key Vault')
 param keyVaultId string
 
+@description('Resource ID of the App Configuration store')
+param appConfigurationId string
+
 @description('Resource ID of the Cosmos DB account')
 param cosmosAccountId string
 
@@ -35,6 +38,7 @@ var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var storageQueueDataContributorRoleId = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 var cosmosDataReaderRoleId = '00000000-0000-0000-0000-000000000001'
+var appConfigurationDataReaderRoleId = '516239f1-63e1-4d78-a4de-a74fb236a071'
 
 var keyVaultPrincipals = [
   {
@@ -142,6 +146,32 @@ resource sqlToRuntimeStorage 'Microsoft.Authorization/roleAssignments@2022-04-01
       'Microsoft.Authorization/roleDefinitions',
       storageBlobDataContributorRoleId
     )
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ===== App Configuration — both applications read their settings from the store =====
+// Read-only on purpose: the applications consume configuration, they never write it.
+resource appConfigurationStore 'Microsoft.AppConfiguration/configurationStores@2024-06-01' existing = {
+  name: last(split(appConfigurationId, '/'))
+}
+
+resource appToAppConfiguration 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appConfigurationId, appServicePrincipalId, appConfigurationDataReaderRoleId)
+  scope: appConfigurationStore
+  properties: {
+    principalId: appServicePrincipalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', appConfigurationDataReaderRoleId)
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource funcToAppConfiguration 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appConfigurationId, functionAppPrincipalId, appConfigurationDataReaderRoleId)
+  scope: appConfigurationStore
+  properties: {
+    principalId: functionAppPrincipalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', appConfigurationDataReaderRoleId)
     principalType: 'ServicePrincipal'
   }
 }

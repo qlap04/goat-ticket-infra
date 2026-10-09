@@ -32,3 +32,14 @@ func appServiceName(environment string, nameSuffix string) string =>
 @export()
 func functionAppName(environment string, nameSuffix string) string =>
   'func-goat-worker-${environment}${empty(nameSuffix) ? '' : '-${nameSuffix}'}'
+
+// Storage account names allow only lowercase letters and digits, no dashes, and at most 24
+// characters. They are globally unique too, which is why they also take nameSuffix: a name already
+// held elsewhere is moved by changing that one value, the same way as the five above.
+@export()
+func runtimeStorageAccountName(environment string, nameSuffix string) string =>
+  toLower('stgrt${environment}${nameSuffix}')
+
+@export()
+func businessStorageAccountName(environment string, nameSuffix string) string =>
+  toLower('stgbiz${environment}${nameSuffix}')

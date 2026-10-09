@@ -130,6 +130,7 @@ module storageModule 'modules/storage/storageAccount.bicep' = {
   params: {
     environment: environment
     location: location
+    nameSuffix: nameSuffix
   }
 }
 

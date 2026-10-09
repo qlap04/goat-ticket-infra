@@ -8,11 +8,17 @@ param environment string
 @description('location of a rg')
 param location string = resourceGroup().location
 
-// storageAccount.bicep
-import { networkAccessRules } from '../shared/networkAccessRules.bicep'
+@description('Suffix appended to the globally unique account names, normally empty')
+param nameSuffix string
 
-var runtimeStorageAccountName = 'stgrt${environment}${take(uniqueString(resourceGroup().id), 8)}'
-var businessStorageAccountName = 'stgbiz${environment}${take(uniqueString(resourceGroup().id), 8)}'
+import { networkAccessRules } from '../shared/networkAccessRules.bicep'
+import { runtimeStorageAccountName as buildRuntimeName, businessStorageAccountName as buildBusinessName } from '../shared/naming.bicep'
+
+// Deterministic, not derived from uniqueString(resourceGroup().id): the delivery pipeline has to
+// know these endpoints before the first deployment, and a hash of the resource group id is not
+// knowable until the group exists. A name already taken elsewhere is moved with nameSuffix.
+var runtimeStorageAccountName = buildRuntimeName(environment, nameSuffix)
+var businessStorageAccountName = buildBusinessName(environment, nameSuffix)
 
 // ===== Runtime Storage — Function's own internal state (lock files, checkpoints) =====
 resource runtimeStorageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' = {

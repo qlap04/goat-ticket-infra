@@ -57,23 +57,17 @@ jobs:
           break: false
           publish: true
 
-      - task: BicepDeploy@0
+      - task: AzureCLI@2
         displayName: "Preview infrastructure changes"
         inputs:
-          type: deploymentStack
-          operation: whatIf
-          scope: subscription
-          azureResourceManagerConnection: goat-ticket-connection
-          subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
-          location: southeastasia
-          bicepVersion: 0.47.16
-          name: stack-goat-dev
-          templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
-          parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
-          actionOnUnmanageResources: detach
-          actionOnUnmanageResourceGroups: detach
-          denySettingsMode: none
-          bypassStackOutOfSyncError: false
+        azureSubscription: goat-ticket-connection
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          az deployment sub what-if \
+            --location southeastasia \
+            --template-file "$(Build.SourcesDirectory)/deploy/bicep/main.bicep" \
+            --parameters "$(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam"
 
   - deployment: InfraDeploy_${{ parameters.environment }}
     displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"

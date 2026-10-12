@@ -3,6 +3,15 @@ name: "Deploy Infra - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
 trigger: none
 
 parameters:
+  - name: environments
+    displayName: "Environments to deliver, in order"
+    type: object
+    default:
+      - environment: dev
+      - environment: sit
+      - environment: uat
+      - environment: preprod
+
   - name: deployScope
     displayName: "Resource groups to deploy"
     type: string
@@ -14,17 +23,14 @@ parameters:
 pool:
   vmImage: ubuntu-24.04
 
-variables:
-  - template: templates/branch-environment.yml
-
 stages:
-  - ${{ if ne(variables.environment, '') }}:
-      - stage: Infra_${{ variables.environment }}
-        displayName: "Deliver infrastructure to ${{ upper(variables.environment) }}"
+  - ${{ each env in parameters.environments }}:
+      - stage: Infra_${{ env.environment }}
+        displayName: "Deliver infrastructure to ${{ upper(env.environment) }}"
         jobs:
           - template: templates/deploy-infra-jobs.yml
             parameters:
-              environment: ${{ variables.environment }}
+              environment: ${{ env.environment }}
               repository: self
               deployScope: ${{ parameters.deployScope }}
 

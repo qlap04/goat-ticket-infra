@@ -19,9 +19,9 @@ deploy/pipeline/templates/deploy-infra-jobs.yml  the ONLY infrastructure pipelin
   Bicep version, stack name) sit in one values-only if/else file, `templates/environment-variables.yml`; the mock runs every environment
   on the dev branch and only prod has its own. `environment` is a free string with no allow-list: any name works as long as `deploy/variables/<env>.bicepparam`
   exists, and it must contain only letters, digits and underscores because it is part of the job name.
-- The infra pipeline is manual and picks the environment from the branch it runs on, in
-  `templates/branch-environment.yml`: `develop` to `dev`, `release/*` to `release`, `main` to `prod`. Any other branch
-  has no stage. Each environment needs `deploy/variables/<env>.bicepparam`; the mock keeps them identical to dev.
+- The infra pipeline is manual. Its `environments` parameter (default `dev`, `sit`, `uat`, `preprod`, `prod`) lists the environments to deliver; a stage per
+  entry runs in that order, and a failed stage stops the ones after it. Each environment needs
+  `deploy/variables/<env>.bicepparam`; the mock keeps them identical to dev.
 - `deployScope` (`all` or `app`, default `app` in the pipelines) limits a run to rg-app: with `app` every rg-network
   module is skipped and the app layer reads the subnets and the AGW identity of what already exists. It travels as
   `DEPLOY_SCOPE` into the `.bicepparam` files. The app pipeline has the same parameter and passes it on.

@@ -272,6 +272,42 @@ Because resources were deleted outside the stack, if the next stack run reports 
 `bypassStackOutOfSyncError: true` in that environment file for one run, then set it back to `false` (the input is
 documented; whether this exact situation raises the error has not been observed).
 
+**6. Certificate import still fails after the role is granted: `ForbiddenByConnection`, then `ForbiddenByFirewall`** (2026-10-12,
+vault `kv-goat-dev-cr7`). OBSERVED, and the import then succeeded. They are two different gates: `ForbiddenByRbac` is the role (item 3),
+`ForbiddenByConnection` is `publicNetworkAccess: Disabled`, and `ForbiddenByFirewall` is `networkAcls.defaultAction: Deny` with no IP rule.
+Enabling public access alone is not enough; the caller IP must be allowed too.
+```
+az keyvault update --name kv-goat-dev-cr7 --public-network-access Enabled
+az keyvault network-rule add --name kv-goat-dev-cr7 --ip-address <client-ip>/32
+az keyvault certificate import --vault-name kv-goat-dev-cr7 --name cert-goatticket --file cert.pfx && rm -rf /tmp/goat-cert
+az keyvault network-rule remove --name kv-goat-dev-cr7 --ip-address <client-ip>/32
+az keyvault update --name kv-goat-dev-cr7 --public-network-access Disabled
+```
+- Take `<client-ip>` from the `Client address:` line of the `ForbiddenByFirewall` error. `curl -s https://api.ipify.org` returned an empty
+  string here, which turned the rule into a bare `/32` and failed with `'/32' does not appear to be an IPv4 or IPv6 network`.
+- The vault keeps `bypass: AzureServices`, so the Application Gateway can still read the certificate once public access is closed again
+  (not yet confirmed by a pipeline run).
+- zsh does not treat `#` as a comment on an interactive prompt: pasting commented lines prints `command not found: #` (harmless).
+  Put `rm -rf` behind `&&` so a failed import keeps the files for a retry.
+
+**7. Infra pipeline: `Microsoft.Authorization/roleAssignments/write` denied for the service connection principal.** OBSERVED on the first
+`all` run: six role assignments in the `rbac` module failed, everything independent of them was created (ARM does not roll back), and the
+modules that depend on `rbac` (`sqlAuditing`, `appGatewayResource`, `subnetAssociation`) did not run. The principal had Contributor, which
+excludes role assignment writes. Grant one of these at subscription scope, then rerun:
+```
+az role assignment create --assignee <service-connection-object-id> --role "Role Based Access Control Administrator" \
+  --scope /subscriptions/<subscription-id>
+```
+The object id is in the error text (`The client '***' with object id '...'`).
+
+**8. What-if step: `DeploymentStackInvalidRetentionInterval ... must be between 1 hour and 3 hours`.** OBSERVED. The CLI help text of
+`az stack-whatif sub create` states 1 to 30 days; Azure itself accepts 1 to 3 hours. The template uses `--retention-interval PT3H`.
+
+**9. Pipeline validation: `service connection $(armConnection) could not be found`.** OBSERVED. A service connection name is resolved when
+the pipeline is compiled, so it cannot come from a `$(variable)` macro, which is only expanded at run time. Write the name in the task
+(`goat-ticket-connection`). The other settings in `environment-variables.yml` (subscription id, location, Bicep version, stack name) are
+not service connections and run as variables.
+
 **Redeploy from empty (order):** purge the vault (1), run the infra pipeline for `dev`, import the certificate (2, 3) as soon
 as `kv-goat-dev` exists, rerun the infra pipeline, then run the app pipeline.
 

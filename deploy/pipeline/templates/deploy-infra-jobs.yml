@@ -81,7 +81,7 @@ jobs:
               --parameters "$(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam" \
               --action-on-unmanage detachAll \
               --deny-settings-mode none \
-              --retention-interval P1D
+              --retention-interval PT3H
 
 
   # Deploy

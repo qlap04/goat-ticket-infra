@@ -14,12 +14,22 @@ deploy/pipeline/templates/deploy-infra-jobs.yml  the ONLY infrastructure pipelin
 
 ## Rules
 
-- Only what varies between callers is a template parameter: `environment`, `environmentName`, `repository`. One
-  subscription, one service connection, one stack, so those are fixed in the template rather than passed through two
-  files. `environment` has an allow-list and selects `deploy/variables/<env>.bicepparam`.
+- Only what varies between callers is a template parameter: `environment`, `repository`, `abcobject`. The Environment
+  bound to the deploy job is `goat-<environment>`. Per-environment stack settings (connection, subscription, location,
+  Bicep version, stack name) sit in one values-only if/else file, `templates/environment-variables.yml`; the mock runs every environment
+  on the dev branch and only prod has its own. `environment` is a free string with no allow-list: any name works as long as `deploy/variables/<env>.bicepparam`
+  exists, and it must contain only letters, digits and underscores because it is part of the job name.
+- The infra pipeline is manual and picks the environment from the branch it runs on, in
+  `templates/branch-environment.yml`: `develop` to `dev`, `release/*` to `release`, `main` to `prod`. Any other branch
+  has no stage. Each environment needs `deploy/variables/<env>.bicepparam`; the mock keeps them identical to dev.
+- `deployScope` (`all` or `app`, default `app` in the pipelines) limits a run to rg-app: with `app` every rg-network
+  module is skipped and the app layer reads the subnets and the AGW identity of what already exists. It travels as
+  `DEPLOY_SCOPE` into the `.bicepparam` files. The app pipeline has the same parameter and passes it on.
 - `.bicepparam` is the only place a Bicep parameter is assigned. No secret passes through Bicep: the application
   pipeline writes secrets to Key Vault behind a toggle.
-- Built-in tasks only (`BicepDeploy@0`, `MicrosoftSecurityDevOps@1`). No inline scripts for lint, validate, what-if or deploy.
+- Built-in tasks only (`BicepDeploy@0`, `MicrosoftSecurityDevOps@1`). No inline scripts for lint, validate or deploy.
+  The one exception is the what-if preview: `BicepDeploy@0` has no `whatIf` operation, so `AzureCLI@2` runs
+  `az stack-whatif sub create` against the stack.
 - Infrastructure is delivered as an Azure deployment stack (`type: deploymentStack`, subscription scope) with the Bicep CLI
   pinned (`bicepVersion`). Keep `denySettingsMode: none` while resources are repaired or deleted by hand.
 - Deploy jobs are `deployment` jobs bound to an Environment; the template never deploys a pull request build.

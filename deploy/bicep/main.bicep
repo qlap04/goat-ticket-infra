@@ -22,8 +22,7 @@
 
 targetScope = 'subscription'
 
-@description('Environment name: dev or prod. The mock deploys every pipeline stage to the dev resources, so the sit, uat and preprod parameter files also set dev here.')
-@allowed(['dev', 'prod'])
+@description('Environment name. It is part of every resource group and resource name, so use letters and digits only.')
 param environment string
 
 @description('Azure region for all resources.')
@@ -42,21 +41,46 @@ param keyVaultCertSecretUri string
 @allowed(['Detection', 'Prevention'])
 param wafMode string
 
+@description('Tags applied to both resource groups. The pipeline supplies the object, for example { owner: goat-team }.')
+param abc object
+
+@description('all deploys both resource groups. app skips every rg-network module and reads the few network pieces the app layer needs from what already exists, so a firewall or gateway deleted overnight is not recreated.')
+@allowed(['all', 'app'])
+param deployScope string
+
 // ===== RESOURCE GROUPS =====
 resource rgNetwork 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-goat-network-${environment}'
   location: location
+  tags: abc
 }
 
 resource rgApp 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-goat-app-${environment}'
   location: location
+  tags: abc
 }
+
+var deployNetwork = deployScope == 'all'
+
+// What the app layer reads from the network layer. With deployScope 'app' the network modules do not run, so
+// these point at the resources a previous full deployment created. The names restate the convention of
+// modules/network/vnet.bicep and modules/gateway-firewall/appGateway.bicep.
+var vnetResourceId = resourceId(subscription().subscriptionId, rgNetwork.name, 'Microsoft.Network/virtualNetworks', 'vnet-goat-${environment}')
+
+resource agwIdentityExisting 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  scope: rgNetwork
+  name: 'id-agw-${environment}'
+}
+
+var snetAppId = deployNetwork ? vnetModule!.outputs.snetAppResourceId : '${vnetResourceId}/subnets/snet-app'
+var snetFuncId = deployNetwork ? vnetModule!.outputs.snetFuncResourceId : '${vnetResourceId}/subnets/snet-func'
+var agwIdentityPrincipalId = deployNetwork ? appGatewayModule!.outputs.agwIdentityPrincipalId : agwIdentityExisting.properties.principalId
 
 // ============================================================
 // 1. NETWORK
 // ============================================================
-module vnetModule 'modules/network/vnet.bicep' = {
+module vnetModule 'modules/network/vnet.bicep' = if (deployNetwork) {
   name: 'vnetDeployment'
   scope: rgNetwork
   params: {
@@ -65,7 +89,7 @@ module vnetModule 'modules/network/vnet.bicep' = {
   }
 }
 
-module nsgModule 'modules/network/nsg.bicep' = {
+module nsgModule 'modules/network/nsg.bicep' = if (deployNetwork) {
   name: 'nsgDeployment'
   scope: rgNetwork
   params: {
@@ -74,7 +98,7 @@ module nsgModule 'modules/network/nsg.bicep' = {
   }
 }
 
-module routeTableModule 'modules/network/routeTable.bicep' = {
+module routeTableModule 'modules/network/routeTable.bicep' = if (deployNetwork) {
   name: 'routeTableDeployment'
   scope: rgNetwork
   params: {
@@ -86,7 +110,7 @@ module routeTableModule 'modules/network/routeTable.bicep' = {
 // ============================================================
 // 2. GATEWAY + FIREWALL (firewall needs network subnet + policy)
 // ============================================================
-module firewallPolicyModule 'modules/gateway-firewall/firewallPolicy.bicep' = {
+module firewallPolicyModule 'modules/gateway-firewall/firewallPolicy.bicep' = if (deployNetwork) {
   name: 'firewallPolicyDeployment'
   scope: rgNetwork
   params: {
@@ -95,26 +119,26 @@ module firewallPolicyModule 'modules/gateway-firewall/firewallPolicy.bicep' = {
   }
 }
 
-module firewallModule 'modules/gateway-firewall/firewall.bicep' = {
+module firewallModule 'modules/gateway-firewall/firewall.bicep' = if (deployNetwork) {
   name: 'firewallDeployment'
   scope: rgNetwork
   params: {
     environment: environment
     location: location
-    azureFirewallSubnetId: vnetModule.outputs.azureFirewallSubnetResourceId
-    firewallPolicyId: firewallPolicyModule.outputs.firewallPolicyId
+    azureFirewallSubnetId: vnetModule!.outputs.azureFirewallSubnetResourceId
+    firewallPolicyId: firewallPolicyModule!.outputs.firewallPolicyId
   }
 }
 
 // ============================================================
 // 3. ROUTE TABLE EGRESS — solves the routeTable ↔ firewall circular dependency
 // ============================================================
-module routeTableEgressModule 'modules/network/routeTableEgress.bicep' = {
+module routeTableEgressModule 'modules/network/routeTableEgress.bicep' = if (deployNetwork) {
   name: 'routeTableEgressDeployment'
   scope: rgNetwork
   params: {
     environment: environment
-    firewallPrivateIp: firewallModule.outputs.firewallPrivateIp
+    firewallPrivateIp: firewallModule!.outputs.firewallPrivateIp
   }
   dependsOn: [
     routeTableModule
@@ -208,7 +232,7 @@ module appServiceModule 'modules/compute/appService.bicep' = {
   params: {
     environment: environment
     location: location
-    appSubnetId: vnetModule.outputs.snetAppResourceId
+    appSubnetId: snetAppId
     appInsightsConnectionString: appInsightsModule.outputs.appInsightsConnectionString
     nameSuffix: nameSuffix
   }
@@ -220,7 +244,7 @@ module functionModule 'modules/compute/function.bicep' = {
   params: {
     environment: environment
     location: location
-    funcSubnetId: vnetModule.outputs.snetFuncResourceId
+    funcSubnetId: snetFuncId
     runtimeStorageAccountName: storageModule.outputs.runtimeStorageAccountName
     appInsightsConnectionString: appInsightsModule.outputs.appInsightsConnectionString
     nameSuffix: nameSuffix
@@ -230,7 +254,7 @@ module functionModule 'modules/compute/function.bicep' = {
 // ============================================================
 // 9. APPLICATION GATEWAY (needs Key Vault cert, snet-appgw, App Service hostname)
 // ============================================================
-module appGatewayModule 'modules/gateway-firewall/appGateway.bicep' = {
+module appGatewayModule 'modules/gateway-firewall/appGateway.bicep' = if (deployNetwork) {
   name: 'appGatewayDeployment'
   scope: rgNetwork
   params: {
@@ -249,7 +273,7 @@ module rbacModule 'modules/security/rbac/rbac.bicep' = {
   params: {
     appServicePrincipalId: appServiceModule.outputs.appServicePrincipalId
     functionAppPrincipalId: functionModule.outputs.functionAppPrincipalId
-    agwIdentityPrincipalId: appGatewayModule.outputs.agwIdentityPrincipalId
+    agwIdentityPrincipalId: agwIdentityPrincipalId
     sqlServerPrincipalId: sqlModule.outputs.sqlServerPrincipalId
     keyVaultId: keyVaultModule.outputs.keyVaultId
     appConfigurationId: appConfigurationModule.outputs.appConfigurationId
@@ -260,18 +284,18 @@ module rbacModule 'modules/security/rbac/rbac.bicep' = {
 }
 
 //appGatewayResourceModule
-module appGatewayResourceModule 'modules/gateway-firewall/appGatewayResource.bicep' = {
+module appGatewayResourceModule 'modules/gateway-firewall/appGatewayResource.bicep' = if (deployNetwork) {
   name: 'appGatewayResourceDeployment'
   scope: rgNetwork
   params: {
     environment: environment
-    appGatewaySubnetId: vnetModule.outputs.snetAppGwResourceId
+    appGatewaySubnetId: vnetModule!.outputs.snetAppGwResourceId
     backendFqdn: appServiceModule.outputs.appServiceDefaultHostname
     customDomain: customDomain
     keyVaultCertSecretUri: keyVaultCertSecretUri
-    agwIdentityId: appGatewayModule.outputs.agwIdentityId
-    wafPolicyId: appGatewayModule.outputs.wafPolicyId
-    publicIpId: appGatewayModule.outputs.publicIpId
+    agwIdentityId: appGatewayModule!.outputs.agwIdentityId
+    wafPolicyId: appGatewayModule!.outputs.wafPolicyId
+    publicIpId: appGatewayModule!.outputs.publicIpId
   }
   dependsOn: [rbacModule]
 }
@@ -294,24 +318,24 @@ module sqlAuditingModule 'modules/database/sqlAuditing.bicep' = {
 // ============================================================
 // 11. PRIVATE DNS ZONES
 // ============================================================
-module privateDnsZonesModule 'modules/privateEndpoints/privateDnsZones.bicep' = {
+module privateDnsZonesModule 'modules/privateEndpoints/privateDnsZones.bicep' = if (deployNetwork) {
   name: 'privateDnsZonesDeployment'
   scope: rgNetwork
   params: {
-    vnetId: vnetModule.outputs.vnetId
+    vnetId: vnetModule!.outputs.vnetId
   }
 }
 
 // ============================================================
 // 12. PRIVATE ENDPOINTS (8 total: sql, cosmos, biz-blob, biz-queue, runtime-blob, keyvault, app, func)
 // ============================================================
-module privateEndpointsModule 'modules/privateEndpoints/privateEndpoints.bicep' = {
+module privateEndpointsModule 'modules/privateEndpoints/privateEndpoints.bicep' = if (deployNetwork) {
   name: 'privateEndpointsDeployment'
   scope: rgNetwork
   params: {
     environment: environment
     location: location
-    peSubnetId: vnetModule.outputs.snetPeResourceId
+    peSubnetId: vnetModule!.outputs.snetPeResourceId
     sqlServerId: sqlModule.outputs.sqlServerId
     cosmosAccountId: cosmosModule.outputs.cosmosAccountId
     businessStorageAccountId: storageModule.outputs.businessStorageAccountId
@@ -319,7 +343,7 @@ module privateEndpointsModule 'modules/privateEndpoints/privateEndpoints.bicep' 
     keyVaultId: keyVaultModule.outputs.keyVaultId
     appServiceId: appServiceModule.outputs.appServiceId
     functionAppId: functionModule.outputs.functionAppId
-    dnsZoneIds: privateDnsZonesModule.outputs.dnsZoneIds
+    dnsZoneIds: privateDnsZonesModule!.outputs.dnsZoneIds
   }
 }
 
@@ -329,17 +353,17 @@ module privateEndpointsModule 'modules/privateEndpoints/privateEndpoints.bicep' 
 // 'subscription' — Bicep does not allow declaring resourceGroup-scoped child
 // resources directly outside a module in a subscription-scope file (BCP165).
 // ============================================================
-module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
+module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = if (deployNetwork) {
   name: 'subnetAssociationDeployment'
   scope: rgNetwork
   params: {
     environment: environment
-    nsgAppGwId: nsgModule.outputs.nsgAppGwId
-    nsgAppId: nsgModule.outputs.nsgAppId
-    nsgFuncId: nsgModule.outputs.nsgFuncId
-    nsgPeId: nsgModule.outputs.nsgPeId
-    routeTableAppId: routeTableModule.outputs.routeTableAppId
-    routeTablePeId: routeTableModule.outputs.routeTablePeId
+    nsgAppGwId: nsgModule!.outputs.nsgAppGwId
+    nsgAppId: nsgModule!.outputs.nsgAppId
+    nsgFuncId: nsgModule!.outputs.nsgFuncId
+    nsgPeId: nsgModule!.outputs.nsgPeId
+    routeTableAppId: routeTableModule!.outputs.routeTableAppId
+    routeTablePeId: routeTableModule!.outputs.routeTablePeId
   }
   // nsgModule and routeTableModule are not listed: this module consumes their outputs as
   // parameters, which already orders them. The rest are listed to make this module the last thing
@@ -370,13 +394,13 @@ module subnetAssociationModule 'modules/network/subnetAssociation.bicep' = {
 // ============================================================
 // Consumed by the delivery pipelines so that no resource name is restated in YAML: the naming
 // convention is declared once, in modules/shared/naming.bicep, and travels outward from here.
-output resourceGroupNetworkName string = rgNetwork.name
-output resourceGroupAppName string = rgApp.name
-output appGatewayPublicIp string = appGatewayResourceModule.outputs.appGatewayPublicIp
-output appServiceDefaultHostname string = appServiceModule.outputs.appServiceDefaultHostname
-output apiAppName string = appServiceModule.outputs.appServiceName
-output functionAppName string = functionModule.outputs.functionAppName
-output keyVaultName string = keyVaultModule.outputs.keyVaultName
-output sqlServerName string = sqlModule.outputs.sqlServerName
-output cosmosAccountName string = cosmosModule.outputs.cosmosAccountName
-output appConfigurationEndpoint string = appConfigurationModule.outputs.appConfigurationEndpoint
+// output resourceGroupNetworkName string = rgNetwork.name
+// output resourceGroupAppName string = rgApp.name
+// output appGatewayPublicIp string = appGatewayResourceModule.outputs.appGatewayPublicIp
+// output appServiceDefaultHostname string = appServiceModule.outputs.appServiceDefaultHostname
+// output apiAppName string = appServiceModule.outputs.appServiceName
+// output functionAppName string = functionModule.outputs.functionAppName
+// output keyVaultName string = keyVaultModule.outputs.keyVaultName
+// output sqlServerName string = sqlModule.outputs.sqlServerName
+// output cosmosAccountName string = cosmosModule.outputs.cosmosAccountName
+// output appConfigurationEndpoint string = appConfigurationModule.outputs.appConfigurationEndpoint

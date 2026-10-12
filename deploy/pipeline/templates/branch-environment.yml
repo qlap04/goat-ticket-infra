@@ -1,0 +1,15 @@
+# Maps the branch the run was started from to the environment it delivers to. Values only.
+# A branch that matches nothing leaves "environment" empty, so the pipeline has no stage to run.
+variables:
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/develop') }}:
+      - name: environment
+        value: dev
+  - ${{ elseif startsWith(variables['Build.SourceBranch'], 'refs/heads/release/') }}:
+      - name: environment
+        value: dev
+  - ${{ elseif eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+      - name: environment
+        value: prod
+  - ${{ else }}:
+      - name: environment
+        value: dev

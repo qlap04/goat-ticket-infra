@@ -1,37 +1,33 @@
-name: "Infrastructure Delivery - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
+name: "Deploy Infra - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
 
 trigger: none
 
-pr:
-  branches:
-    include:
-      - develop
-      - main
-      - release/*
-  paths:
-    include:
-      - deploy/bicep/**
-      - deploy/pipeline/**
-      - deploy/variables/**
-
 parameters:
-  - name: environments
-    displayName: "Environments to deliver, in order"
-    type: object
-    default:
-      - environment: dev
-        environmentName: goat-dev
+  - name: deployScope
+    displayName: "Resource groups to deploy"
+    type: string
+    default: app
+    values:
+      - all
+      - app
 
 pool:
   vmImage: ubuntu-24.04
 
+variables:
+  - template: templates/branch-environment.yml
+
 stages:
-  - ${{ each env in parameters.environments }}:
-      - stage: Infra_${{ env.environment }}
-        displayName: "Deliver infrastructure to ${{ upper(env.environment) }}"
+  - ${{ if ne(variables.environment, '') }}:
+      - stage: Infra_${{ variables.environment }}
+        displayName: "Deliver infrastructure to ${{ upper(variables.environment) }}"
         jobs:
           - template: templates/deploy-infra-jobs.yml
             parameters:
-              environment: ${{ env.environment }}
-              environmentName: ${{ env.environmentName }}
+              environment: ${{ variables.environment }}
               repository: self
+              deployScope: ${{ parameters.deployScope }}
+
+              # Mock object shared by every environment; it becomes the Bicep parameter "abc" (resource group tags).
+              abcobject:
+                owner: goat-team

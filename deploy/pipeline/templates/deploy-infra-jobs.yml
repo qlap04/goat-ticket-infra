@@ -1,15 +1,6 @@
 parameters:
   - name: environment
     type: string
-    values:
-      - dev
-      - sit
-      - uat
-      - preprod
-      - prod
-
-  - name: environmentName
-    type: string
 
   - name: repository
     type: string
@@ -17,25 +8,48 @@ parameters:
       - self
       - InfraRepo
 
+  # Env specific values -> Bicep parameter "abc". 
+  - name: abcobject
+    type: object
+
+  # all deploys both resource groups; app skips rg-network. Becomes the Bicep parameter "deployScope".
+  - name: deployScope
+    type: string
+    default: all
+    values:
+      - all
+      - app
+
 jobs:
   - job: InfraDeploy_${{ parameters.environment }}_Checks
-    displayName: "Check infrastructure changes for ${{ upper(parameters.environment) }}"
-    timeoutInMinutes: 30
+    displayName: "Check ${{ upper(parameters.environment) }} Infra"
+    variables:
+      - template: environment-variables.yml
+        parameters:
+          environment: ${{ parameters.environment }}
+
+      # the .bicepparam files read it.
+      - name: ABC_JSON
+        value: ${{ convertToJson(parameters.abcobject) }}
+      - name: DEPLOY_SCOPE
+        value: ${{ parameters.deployScope }}
+
     steps:
       - checkout: ${{ parameters.repository }}
         fetchDepth: 1
 
+        # Validate
       - task: BicepDeploy@0
-        displayName: "Validate infrastructure changes against Azure"
+        displayName: "Validate"
         inputs:
           type: deploymentStack
           operation: validate
           scope: subscription
-          azureResourceManagerConnection: goat-ticket-connection
-          subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
-          location: southeastasia
-          bicepVersion: 0.47.16
-          name: stack-goat-dev
+          azureResourceManagerConnection: $(armConnection)
+          subscriptionId: $(subscriptionId)
+          location: $(location)
+          bicepVersion: $(bicepVersion)
+          name: $(stackName)
           templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
           parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
           actionOnUnmanageResources: detach
@@ -43,38 +57,47 @@ jobs:
           denySettingsMode: none
           bypassStackOutOfSyncError: false
 
-      - task: UseDotNet@2
-        displayName: "Install .NET 6 runtime for the security scanner"
-        inputs:
-          packageType: runtime
-          version: 6.x
-
+        # Security Scan
       - task: MicrosoftSecurityDevOps@1
-        displayName: "Scan infrastructure code for security issues"
+        displayName: "Security Scan"
         inputs:
           tools: checkov
           categories: IaC
           break: false
-          publish: true
 
+        # What-if
       - task: AzureCLI@2
-        displayName: "Preview infrastructure changes"
+        displayName: "Preview Infra (What-if)"
         inputs:
-        azureSubscription: goat-ticket-connection
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          az deployment sub what-if \
-            --location southeastasia \
-            --template-file "$(Build.SourcesDirectory)/deploy/bicep/main.bicep" \
-            --parameters "$(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam"
+          azureSubscription: goat-ticket-connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            az stack-whatif sub create \
+              --name "whatif-$(stackName)" \
+              --location "$(location)" \
+              --stack-id "/subscriptions/$(subscriptionId)/providers/Microsoft.Resources/deploymentStacks/$(stackName)" \
+              --template-file "$(Build.SourcesDirectory)/deploy/bicep/main.bicep" \
+              --parameters "$(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam" \
+              --action-on-unmanage detachAll \
+              --deny-settings-mode none \
+              --retention-interval P1D
 
+
+  # Deploy
   - deployment: InfraDeploy_${{ parameters.environment }}
-    displayName: "Deploy infrastructure to ${{ upper(parameters.environment) }}"
+    displayName: "Deploy ${{ upper(parameters.environment) }} Infra"
     dependsOn: InfraDeploy_${{ parameters.environment }}_Checks
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
-    timeoutInMinutes: 90
-    environment: ${{ parameters.environmentName }}
+    environment: goat-${{ parameters.environment }}
+    variables:
+      - template: environment-variables.yml
+        parameters:
+          environment: ${{ parameters.environment }}
+      - name: ABC_JSON
+        value: ${{ convertToJson(parameters.abcobject) }}
+      - name: DEPLOY_SCOPE
+        value: ${{ parameters.deployScope }}
     strategy:
       runOnce:
         deploy:
@@ -88,11 +111,11 @@ jobs:
                 type: deploymentStack
                 operation: create
                 scope: subscription
-                azureResourceManagerConnection: goat-ticket-connection
-                subscriptionId: 3a69333f-bef6-45a8-9206-f82c71e24d70
-                location: southeastasia
-                bicepVersion: 0.47.16
-                name: stack-goat-dev
+                azureResourceManagerConnection: $(armConnection)
+                subscriptionId: $(subscriptionId)
+                location: $(location)
+                bicepVersion: $(bicepVersion)
+                name: $(stackName)
                 templateFile: $(Build.SourcesDirectory)/deploy/bicep/main.bicep
                 parametersFile: $(Build.SourcesDirectory)/deploy/variables/${{ parameters.environment }}.bicepparam
                 actionOnUnmanageResources: detach

@@ -4,9 +4,6 @@ parameters:
 
   - name: repository
     type: string
-    values:
-      - self
-      - InfraRepo
 
   # Env specific values -> Bicep parameter "abc". 
   - name: abcobject

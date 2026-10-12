@@ -4,8 +4,6 @@ parameters:
 
 variables:
   - ${{ if eq(parameters.environment, 'prod') }}:
-      - name: armConnection
-        value: goat-ticket-connection
       - name: subscriptionId
         value: 3a69333f-bef6-45a8-9206-f82c71e24d70
       - name: location
@@ -15,8 +13,6 @@ variables:
       - name: stackName
         value: stack-goat-prod
   - ${{ else }}:
-      - name: armConnection
-        value: goat-ticket-connection
       - name: subscriptionId
         value: 3a69333f-bef6-45a8-9206-f82c71e24d70
       - name: location

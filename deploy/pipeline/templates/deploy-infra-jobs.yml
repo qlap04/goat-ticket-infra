@@ -45,7 +45,7 @@ jobs:
           type: deploymentStack
           operation: validate
           scope: subscription
-          azureResourceManagerConnection: $(armConnection)
+          azureResourceManagerConnection: goat-ticket-connection
           subscriptionId: $(subscriptionId)
           location: $(location)
           bicepVersion: $(bicepVersion)
@@ -111,7 +111,7 @@ jobs:
                 type: deploymentStack
                 operation: create
                 scope: subscription
-                azureResourceManagerConnection: $(armConnection)
+                azureResourceManagerConnection: goat-ticket-connection
                 subscriptionId: $(subscriptionId)
                 location: $(location)
                 bicepVersion: $(bicepVersion)

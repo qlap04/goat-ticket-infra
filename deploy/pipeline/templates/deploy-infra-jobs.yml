@@ -9,13 +9,10 @@ parameters:
   - name: abcobject
     type: object
 
-  # all deploys both resource groups; app skips rg-network. Becomes the Bicep parameter "deployScope".
-  - name: deployScope
-    type: string
-    default: all
-    values:
-      - all
-      - app
+  # true deploys rg-network and rg-app; false skips rg-network. Reaches Bicep as the parameter "deployScope".
+  - name: deployNetwork
+    type: boolean
+    default: false
 
 jobs:
   - job: InfraDeploy_${{ parameters.environment }}_Checks
@@ -29,7 +26,10 @@ jobs:
       - name: ABC_JSON
         value: ${{ convertToJson(parameters.abcobject) }}
       - name: DEPLOY_SCOPE
-        value: ${{ parameters.deployScope }}
+        ${{ if eq(parameters.deployNetwork, true) }}:
+          value: all
+        ${{ else }}:
+          value: app
 
     steps:
       - checkout: ${{ parameters.repository }}
@@ -94,7 +94,10 @@ jobs:
       - name: ABC_JSON
         value: ${{ convertToJson(parameters.abcobject) }}
       - name: DEPLOY_SCOPE
-        value: ${{ parameters.deployScope }}
+        ${{ if eq(parameters.deployNetwork, true) }}:
+          value: all
+        ${{ else }}:
+          value: app
     strategy:
       runOnce:
         deploy:

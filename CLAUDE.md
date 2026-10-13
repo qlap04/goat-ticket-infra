@@ -19,12 +19,14 @@ deploy/pipeline/templates/deploy-infra-jobs.yml  the ONLY infrastructure pipelin
   Bicep version, stack name) sit in one values-only if/else file, `templates/environment-variables.yml`; the mock runs every environment
   on the dev branch and only prod has its own. `environment` is a free string with no allow-list: any name works as long as `deploy/variables/<env>.bicepparam`
   exists, and it must contain only letters, digits and underscores because it is part of the job name.
-- The infra pipeline is manual. Its `environments` parameter (default `dev`, `sit`, `uat`, `preprod`, `prod`) lists the environments to deliver; a stage per
-  entry runs in that order, and a failed stage stops the ones after it. Each environment needs
+- The infra pipeline is manual. `azure-pipelines-infra.yml` defines one stage per environment (dev, sit, uat, preprod,
+  prod), written out one by one, in that order. The `environments` parameter (a list of names, default `dev`, `sit`, `uat`,
+  `preprod`) picks which of them run; a name that is not one of the five has no stage. Each environment needs
   `deploy/variables/<env>.bicepparam`; the mock keeps them identical to dev.
-- `deployScope` (`all` or `app`, default `app` in the pipelines) limits a run to rg-app: with `app` every rg-network
-  module is skipped and the app layer reads the subnets and the AGW identity of what already exists. It travels as
-  `DEPLOY_SCOPE` into the `.bicepparam` files. The app pipeline has the same parameter and passes it on.
+- `deployNetwork` (a checkbox, default off) limits a run to rg-app: when off, every rg-network module is skipped and the
+  app layer reads the subnets and the AGW identity of what already exists; when on, both resource groups are deployed.
+  It travels as `DEPLOY_SCOPE` (`all` or `app`) into the `.bicepparam` files. The app pipeline has the same checkbox and
+  passes it on. `environments` is a plain string of names separated by commas, for example `dev,sit`.
 - `.bicepparam` is the only place a Bicep parameter is assigned. No secret passes through Bicep: the application
   pipeline writes secrets to Key Vault behind a toggle.
 - Built-in tasks only (`BicepDeploy@0`, `MicrosoftSecurityDevOps@1`). No inline scripts for lint, validate or deploy.

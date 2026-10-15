@@ -132,9 +132,9 @@ Stage Deploy_<env>   dev, sit, uat, preprod, prod  (chained, each skippable)
 
 ### 5.3 Infrastructure pipeline (`deploy/pipeline/azure-pipelines-infra.yml`, infra repo)
 
-Independent of the app pipeline. Manual run, no `pr:` trigger. Parameters: `environments` (a string of names separated by commas, default `dev,sit,uat,preprod`) and `deployNetwork`
-(a checkbox: off skips every rg-network module, on deploys both resource groups; it reaches Bicep as `DEPLOY_SCOPE`). The five stages (dev, sit, uat, preprod, prod) are written out one by one; a stage exists only when its name is
-in `environments`, and they run in the order written. Jobs: `<name>_Checks` (validate, security scan,
+Independent of the app pipeline. Manual run, no `pr:` trigger. Parameters: `deployNetwork`
+(a checkbox: off skips every rg-network module, on deploys both resource groups; it reaches Bicep as `DEPLOY_SCOPE`) and `abcobject`. The five stages (dev, sit, uat, preprod, prod) are written out one by one and run in that
+order, each after the one before it succeeds; the Environment approval is the gate. Jobs: `<name>_Checks` (validate, security scan,
 what-if) then `<name>` (deployment job bound to the Environment).
 
 All Bicep steps use `BicepDeploy@0` with `type: deploymentStack` at subscription scope, same stack name for validate,
@@ -150,7 +150,7 @@ deny settings would block the firewall repair in section 7 and a manual resource
 deploy/pipeline/azure-pipelines-app.yml   ->  deploy/pipeline/templates/deploy-env-stage.yml    (app repo)
 deploy/pipeline/azure-pipelines-infra.yml ->  deploy/pipeline/templates/deploy-infra-jobs.yml   (infra repo)
                                               deploy/variables/<env>.bicepparam  (Bicep values)
-                                              templates/environment-variables.yml  (service connection, resource names, settings)
+                                              variables/environment-variables.yml  (service connection, resource names, settings)
 ```
 
 - `environment-variables.yml` holds what differs per environment in one if/else: the service connection, the resource

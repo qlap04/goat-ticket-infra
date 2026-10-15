@@ -3,12 +3,6 @@ name: "Deploy Infra - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)"
 trigger: none
 
 parameters:
-  # Names separated by commas, for example: dev,sit
-  - name: environments
-    displayName: "Environments"
-    type: string
-    default: dev,sit,uat,preprod
-
   - name: deployNetwork
     displayName: "Deploy network"
     type: boolean
@@ -24,64 +18,64 @@ parameters:
 pool:
   vmImage: ubuntu-24.04
 
-# One stage per environment, in the order written. A stage exists only when its name is in the "environments" list.
+# One stage per environment, in the order written. Each stage starts after the one before it succeeds.
 stages:
   #DEV
-  - ${{ if containsValue(split(replace(parameters.environments, ' ', ''), ','), 'dev') }}:
-      - stage: Infra_dev
-        displayName: "Deliver infra to DEV"
-        jobs:
-          - template: templates/deploy-infra-jobs.yml
-            parameters:
-              environment: dev
-              repository: self
-              deployNetwork: ${{ parameters.deployNetwork }}
-              abcobject: ${{ parameters.abcobject }}
+  - stage: Infra_dev
+    displayName: "Deliver infra to DEV"
+    dependsOn: []
+    jobs:
+      - template: templates/deploy-infra-jobs.yml
+        parameters:
+          environment: dev
+          repository: self
+          deployNetwork: ${{ parameters.deployNetwork }}
+          abcobject: ${{ parameters.abcobject }}
 
   #SIT
-  - ${{ if containsValue(split(replace(parameters.environments, ' ', ''), ','), 'sit') }}:
-      - stage: Infra_sit
-        displayName: "Deliver infra to SIT"
-        jobs:
-          - template: templates/deploy-infra-jobs.yml
-            parameters:
-              environment: sit
-              repository: self
-              deployNetwork: ${{ parameters.deployNetwork }}
-              abcobject: ${{ parameters.abcobject }}
+  - stage: Infra_sit
+    displayName: "Deliver infra to SIT"
+    dependsOn: Infra_dev
+    jobs:
+      - template: templates/deploy-infra-jobs.yml
+        parameters:
+          environment: sit
+          repository: self
+          deployNetwork: ${{ parameters.deployNetwork }}
+          abcobject: ${{ parameters.abcobject }}
 
   #UAT
-  - ${{ if containsValue(split(replace(parameters.environments, ' ', ''), ','), 'uat') }}:
-      - stage: Infra_uat
-        displayName: "Deliver infra to UAT"
-        jobs:
-          - template: templates/deploy-infra-jobs.yml
-            parameters:
-              environment: uat
-              repository: self
-              deployNetwork: ${{ parameters.deployNetwork }}
-              abcobject: ${{ parameters.abcobject }}
+  - stage: Infra_uat
+    displayName: "Deliver infra to UAT"
+    dependsOn: Infra_sit
+    jobs:
+      - template: templates/deploy-infra-jobs.yml
+        parameters:
+          environment: uat
+          repository: self
+          deployNetwork: ${{ parameters.deployNetwork }}
+          abcobject: ${{ parameters.abcobject }}
 
   #PREPROD
-  - ${{ if containsValue(split(replace(parameters.environments, ' ', ''), ','), 'preprod') }}:
-      - stage: Infra_preprod
-        displayName: "Deliver infra to PREPROD"
-        jobs:
-          - template: templates/deploy-infra-jobs.yml
-            parameters:
-              environment: preprod
-              repository: self
-              deployNetwork: ${{ parameters.deployNetwork }}
-              abcobject: ${{ parameters.abcobject }}
+  - stage: Infra_preprod
+    displayName: "Deliver infra to PREPROD"
+    dependsOn: Infra_uat
+    jobs:
+      - template: templates/deploy-infra-jobs.yml
+        parameters:
+          environment: preprod
+          repository: self
+          deployNetwork: ${{ parameters.deployNetwork }}
+          abcobject: ${{ parameters.abcobject }}
 
   #PROD
-  - ${{ if containsValue(split(replace(parameters.environments, ' ', ''), ','), 'prod') }}:
-      - stage: Infra_prod
-        displayName: "Deliver infra to PROD"
-        jobs:
-          - template: templates/deploy-infra-jobs.yml
-            parameters:
-              environment: prod
-              repository: self
-              deployNetwork: ${{ parameters.deployNetwork }}
-              abcobject: ${{ parameters.abcobject }}
+  - stage: Infra_prod
+    displayName: "Deliver infra to PROD"
+    dependsOn: Infra_preprod
+    jobs:
+      - template: templates/deploy-infra-jobs.yml
+        parameters:
+          environment: prod
+          repository: self
+          deployNetwork: ${{ parameters.deployNetwork }}
+          abcobject: ${{ parameters.abcobject }}

@@ -3,7 +3,8 @@ parameters:
     type: string
 
 variables:
-  - ${{ if eq(parameters.environment, 'prod') }}:
+  # Mock example: dev001 uses the prod values
+  - ${{ if or(eq(parameters.environment, 'prod'), eq(parameters.environment, 'dev001')) }}:
       - name: armConnection
         value: goat-ticket-connection
       - name: subscriptionId

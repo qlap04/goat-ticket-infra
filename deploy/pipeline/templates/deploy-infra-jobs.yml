@@ -5,7 +5,7 @@ parameters:
   - name: repository
     type: string
 
-  # Env specific values -> Bicep parameter "abc". 
+  # Env specific values -> Bicep parameter "abc".
   - name: abcobject
     type: object
 
@@ -18,7 +18,7 @@ jobs:
   - job: InfraDeploy_${{ parameters.environment }}_Checks
     displayName: "Check ${{ upper(parameters.environment) }} Infra"
     variables:
-      - template: environment-variables.yml
+      - template: ../../variables/environment-variables.yml
         parameters:
           environment: ${{ parameters.environment }}
 
@@ -80,7 +80,6 @@ jobs:
               --deny-settings-mode none \
               --retention-interval PT3H
 
-
   # Deploy
   - deployment: InfraDeploy_${{ parameters.environment }}
     displayName: "Deploy ${{ upper(parameters.environment) }} Infra"
@@ -88,7 +87,7 @@ jobs:
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     environment: goat-${{ parameters.environment }}
     variables:
-      - template: environment-variables.yml
+      - template: ../../variables/environment-variables.yml
         parameters:
           environment: ${{ parameters.environment }}
       - name: ABC_JSON
